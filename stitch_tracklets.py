@@ -120,6 +120,18 @@ def main(FLAGS):
     DATA = yaml.safe_load(open(data_cfg, 'r'))
     split = 'valid'
     dataset = 'data/SemanticKitti'
+    task_set = FLAGS.task_set
+    save_dir = FLAGS.save_dir
+    
+    # thing classes
+    if task_set == 0:
+        things_label_max = 3
+    elif task_set == 1:
+        things_label_max = 4
+    elif task_set == 2:
+        things_label_max = 7
+    else:
+        things_label_max = 9
 
     prediction_dir =  FLAGS.predictions
     if split == 'valid':
@@ -136,14 +148,14 @@ def main(FLAGS):
     assoc_saving.append(str(n_test_frames))
     assoc_saving = '_'.join(assoc_saving)
 
-    save_path = '{}/stitch'.format(prediction_dir)+assoc_saving
+    save_path = '{}/stitch'.format(save_dir)+assoc_saving
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
     with open(data_cfg, 'r') as stream:
         doc = yaml.safe_load(stream)
-        learning_map_doc = doc['learning_map']
-        inv_learning_map_doc = doc['learning_map_inv']
+        learning_map_doc = doc['task_set_map'][task_set]['learning_map']
+        inv_learning_map_doc = doc['task_set_map'][task_set]['learning_map_inv']
 
     inv_learning_map = np.zeros((np.max([k for k in inv_learning_map_doc.keys()]) + 1), dtype=np.int32)
     for k, v in inv_learning_map_doc.items():
@@ -151,9 +163,9 @@ def main(FLAGS):
 
     # get number of interest classes, and the label mappings
     # class
-    class_remap = DATA["learning_map"]
-    class_inv_remap = DATA["learning_map_inv"]
-    class_ignore = DATA["learning_ignore"]
+    class_remap = DATA['task_set_map'][task_set]["learning_map"]
+    class_inv_remap = DATA['task_set_map'][task_set]["learning_map_inv"]
+    class_ignore = DATA['task_set_map'][task_set]["learning_ignore"]
     nr_classes = len(class_inv_remap)
     class_strings = DATA["labels"]
 
@@ -221,7 +233,7 @@ def main(FLAGS):
             new_points = np.sum(np.expand_dims(hpoints, 2) * pose.T, axis=1)
             points = new_points[:, :3]
 
-            things = (label_sem_class < 9) & (label_sem_class > 0)
+            things = (label_sem_class < things_label_max) & (label_sem_class > 0)
             ins_ids = np.unique(label_inst * things)
 
             if os.path.exists(fet_path):
@@ -296,7 +308,7 @@ def main(FLAGS):
                                                   '{0:02d}_{1:07d}_i.npy'.format(sequence, idx - i))
                     prev_inst_orig = np.load(prev_inst_orig_path)
 
-                    things = (prev_sem < 9) & (prev_sem > 0)
+                    things = (prev_sem < things_label_max) & (prev_sem > 0)
 
                     # associate instances from previous frame pred_n and current prediction which contain pred_n, pred_n+1
                     association_costs, associations = associate_instances_overlapping_frames(prev_inst_orig* things, prev_inst* things)
@@ -495,6 +507,21 @@ if __name__ == '__main__':
         '--predictions', '-p',
         dest='predictions',
         type=str,
+        required=True
+    )
+    
+    parser.add_argument(
+        '--save_dir', '-sd',
+        dest='save_dir',
+        type=str,
+        required=True
+    )
+                       
+    parser.add_argument(
+        '--task_set', '-t',
+        dest='task_set',
+        type=int,
+        default=1,
         required=True
     )
 

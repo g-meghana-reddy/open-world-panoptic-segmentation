@@ -3,9 +3,12 @@ import torch
 
 
 def remove_outliers(points):
-    m ,_ = torch.median(points, 0)
-    d = ((points - m) ** 2).sum(1)
-    return d < torch.mean(d)*2
+    #Meghs m ,_ = torch.median(points, 0)
+    
+    median = torch.stack(get_median_center_from_points(points))
+    dist = ((points - median) ** 2).sum(1)
+    valid_indices = torch.where(dist < torch.mean(dist)*2)
+    return points[valid_indices], valid_indices
 
 def kalman_box_to_eight_point(kalman_bbox):
 

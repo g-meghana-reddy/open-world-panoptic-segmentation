@@ -24,15 +24,26 @@
 # Common libs
 import argparse
 import signal
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # Dataset
 from datasets.SemanticKitti import *
 from models.architectures import KPFCNN
 from utils.config import Config
+from utils.evaluate_confusion import confusion_openset
+from utils.metrics import fast_confusion
 from utils.trainer import ModelTrainer
 
-import wandb
+import sklearn
+from tqdm import tqdm
 import pdb
+
+
+np.random.seed(0)
+torch.manual_seed(0)
+torch.cuda.manual_seed_all(0)
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -173,7 +184,7 @@ class SemanticKittiConfig(Config):
     epoch_steps = 500
 
     # Number of validation examples per epoch
-    validation_size = 200
+    validation_size = 4071
 
     # Number of epoch between each checkpoint
     checkpoint_gap = 50
@@ -207,9 +218,6 @@ class SemanticKittiConfig(Config):
 
     # Only train class and center head
     pre_train = False
-    
-    # use wandb for logging
-    wandb = False
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -220,11 +228,8 @@ class SemanticKittiConfig(Config):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=2)
-    parser.add_argument("-s", "--saving_path", help="Path to save predictions", default=None)
     parser.add_argument("-p", "--prev_train_path", help="Directory to load checkpoint", default=None)
-    parser.add_argument("-i", "--chkp_idx", help="Index of checkpoint", type=int, default=2)
-    parser.add_argument("--pretrain", action="store_true", help="Pretrain network")
-    parser.add_argument("--wandb", action="store_true", help="Use wandb for logging")
+    parser.add_argument("-i", "--chkp_idx", help="Index of checkpoint",  default=None)
     args = parser.parse_args()
     return args
 
@@ -250,9 +255,6 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = GPU_ID
 
     args = parse_args()
-    
-    if args.wandb:
-        wandb.init(project="mscv-capstone")
 
     ###############
     # Previous chkp
@@ -267,21 +269,17 @@ if __name__ == '__main__':
     # chkp_idx = None
     previous_training_path = args.prev_train_path
     chkp_idx = args.chkp_idx
-    if previous_training_path:
 
-        # Find all snapshot in the chosen training folder
-        chkp_path = os.path.join('results', previous_training_path, 'checkpoints')
-        chkps = [f for f in os.listdir(chkp_path) if f[:4] == 'chkp']
+    # Find all snapshot in the chosen training folder
+    chkp_path = os.path.join('results', previous_training_path, 'checkpoints')
+    chkps = [f for f in os.listdir(chkp_path) if f[:4] == 'chkp']
 
-        # Find which snapshot to restore
-        if chkp_idx is None:
-            chosen_chkp = 'current_chkp.tar'
-        else:
-            chosen_chkp = np.sort(chkps)[chkp_idx]
-        chosen_chkp = os.path.join('results', previous_training_path, 'checkpoints', chosen_chkp)
-
+    # Find which snapshot to restore
+    if chkp_idx is None:
+        chosen_chkp = 'current_chkp.tar'
     else:
-        chosen_chkp = None
+        chosen_chkp = np.sort(chkps)[chkp_idx]
+    chosen_chkp = os.path.join('results', previous_training_path, 'checkpoints', chosen_chkp)
 
     ##############
     # Prepare Data
@@ -297,7 +295,7 @@ if __name__ == '__main__':
     if previous_training_path:
         config.load(os.path.join('results', previous_training_path))
         config.saving_path = None
-    config.pre_train = args.pretrain
+    config.pre_train = False # True
     config.free_dim = 4
     config.n_frames = 1 # 2
     config.reinit_var = True
@@ -306,39 +304,33 @@ if __name__ == '__main__':
     #config.sampling = 'objectness'
     config.sampling = 'importance'
     config.decay_sampling = 'None'
-    # Get path from argument if given
-    # if len(sys.argv) > 1:
-    #     config.saving_path = sys.argv[1]
+    config.validation_size = 4071
 
     config.task_set = args.task_set
-    config.saving_path = args.saving_path
-    config.wandb = args.wandb
-
-    if config.pre_train:
-        config.max_epoch = 200
-        config.learning_rate = 1e-2
+    
+    if config.task_set in [0,1]:
+        return_unknowns = True
     else:
-        config.max_epoch = 800
-        config.learning_rate = 1e-3
-    config.lr_decays = {i: 0.1 ** (1 / 200) for i in range(1, config.max_epoch)}
+        return_unknowns = False
 
     # Initialize datasets
-    training_dataset = SemanticKittiDataset(config, set='training',
-                                            balance_classes=True)
+    # training_dataset = SemanticKittiDataset(config, set='training',
+    #                                         balance_classes=True)
     test_dataset = SemanticKittiDataset(config, set='validation',
-                                        balance_classes=False)
+                                        balance_classes=False,
+                                        return_unknowns=return_unknowns,seqential_batch=True)
 
     # Initialize samplers
-    training_sampler = SemanticKittiSampler(training_dataset)
+    # training_sampler = SemanticKittiSampler(training_dataset)
     test_sampler = SemanticKittiSampler(test_dataset)
 
     # Initialize the dataloader
-    training_loader = DataLoader(training_dataset,
-                                 batch_size=1,
-                                 sampler=training_sampler,
-                                 collate_fn=SemanticKittiCollate,
-                                 num_workers=config.input_threads,
-                                 pin_memory=True)
+    # training_loader = DataLoader(training_dataset,
+    #                              batch_size=1,
+    #                              sampler=training_sampler,
+    #                              collate_fn=SemanticKittiCollate,
+    #                              num_workers=config.input_threads,
+    #                              pin_memory=True)
     test_loader = DataLoader(test_dataset,
                              batch_size=1,
                              sampler=test_sampler,
@@ -347,11 +339,11 @@ if __name__ == '__main__':
                              pin_memory=True)
 
     # Calibrate max_in_point value
-    training_sampler.calib_max_in(config, training_loader, verbose=True)
+    # training_sampler.calib_max_in(config, training_loader, verbose=True)
     test_sampler.calib_max_in(config, test_loader, verbose=True)
 
     # Calibrate samplers
-    training_sampler.calibration(training_loader, verbose=True)
+    # training_sampler.calibration(training_loader, verbose=True)
     test_sampler.calibration(test_loader, verbose=True)
 
     # debug_timing(training_dataset, training_loader)
@@ -363,32 +355,167 @@ if __name__ == '__main__':
 
     # Define network model
     t1 = time.time()
-    net = KPFCNN(config, training_dataset.label_values, training_dataset.ignored_labels)
 
-    debug = False
-    if debug:
-        print('\n*************************************\n')
-        print(net)
-        print('\n*************************************\n')
-        for param in net.parameters():
-            if param.requires_grad:
-                print(param.shape)
-        print('\n*************************************\n')
-        print("Model size %i" % sum(param.numel() for param in net.parameters() if param.requires_grad))
-        print('\n*************************************\n')
+    checkpoint = torch.load(chosen_chkp) #, map_location=torch.cuda.current_device())
+    
+    net = KPFCNN(config, test_dataset.label_values, test_dataset.ignored_labels)
+    net.load_state_dict(checkpoint['model_state_dict'])
+    # self.epoch = checkpoint['epoch']
+    net.eval()
 
     # Define a trainer class
-    if previous_training_path:
-        trainer = ModelTrainer(net, config, chkp_path=chosen_chkp)
-    else:
-        trainer = ModelTrainer(net, config, chkp_path=chosen_chkp)
+    # trainer = ModelTrainer(net, config, chkp_path=chosen_chkp)
     print('Done in {:.1f}s\n'.format(time.time() - t1))
 
-    print('\nStart training')
+    print('\nStart forward pass')
+    print('**************')
+    
+    softmax = torch.nn.Softmax(1)
+    predictions = []
+    true_mapped_labels = []
+    true_unmapped_labels = []
+
+    val_label_values = test_loader.dataset.label_values
+    
+    for batch in tqdm(test_loader):
+
+        if torch.cuda.device_count() >= 1:
+            net.to(torch.cuda.current_device())
+            batch.to(torch.cuda.current_device())
+        
+        with torch.no_grad():
+            outputs, centers_output, var_output, embedding = net(batch, config)
+            probs = softmax(outputs).cpu().detach().numpy()
+            preds = val_label_values[np.argmax(probs, axis=1)]
+            preds = torch.from_numpy(preds)
+            preds.to(outputs.device)
+        # Get probs and labels
+        stk_probs = softmax(outputs).cpu().detach().numpy()
+        lengths = batch.lengths[0].cpu().numpy()
+        r_inds_list = batch.reproj_inds
+        r_mask_list = batch.reproj_masks
+        labels_list = batch.val_labels
+        if config.task_set in [0,1]:
+            unknown_labels_list = batch.val_unk_labels_list
+            unknown_label_values = list(test_dataset.unknown_label_to_names.keys())
+
+        i0 = 0
+        for b_i, length in enumerate(lengths):
+            probs = stk_probs[i0:i0 + length]
+            proj_inds = r_inds_list[b_i]
+            proj_mask = r_mask_list[b_i]
+            frame_labels = labels_list[b_i]
+            if config.task_set in [0,1]:
+                frame_unknown_labels = unknown_labels_list[b_i]
+
+            # Project predictions on the frame points
+            proj_probs = probs[proj_inds]
+
+            # Safe check if only one point:
+            if proj_probs.ndim < 2:
+                proj_probs = np.expand_dims(proj_probs, 0)
+            
+            # Insert false columns for ignored labels
+            for l_ind, label_value in enumerate(val_label_values):
+                if label_value in test_loader.dataset.ignored_labels:
+                    proj_probs = np.insert(proj_probs, l_ind, 0, axis=1)
+
+            # Predicted labels
+            preds = val_label_values[np.argmax(proj_probs, axis=1)]
+
+            predictions += [preds]
+            true_mapped_labels += [frame_labels[proj_mask]]
+            if config.task_set in [0,1]:
+                true_unmapped_labels += [frame_unknown_labels[proj_mask]]
+
+    print('\nCreate confusion matrix')
     print('**************')
 
-    # Training
-    trainer.train(net, training_loader, test_loader, config)
+    if args.task_set == 0:
+        k = 6
+    elif args.task_set == 1:
+        k = 10
+    else:
+        k = 19
+        
+    if args.task_set == 2:
+        conf_matrix_1 = sklearn.metrics.confusion_matrix(
+            np.concatenate(true_mapped_labels), 
+            np.concatenate(predictions), 
+            labels=val_label_values)
 
-    print('Forcing exit now')
-    os.kill(os.getpid(), signal.SIGINT)
+    else:
+        conf_matrix_1 = sklearn.metrics.confusion_matrix(
+            np.concatenate(true_mapped_labels), 
+            np.concatenate(predictions), 
+            labels=val_label_values)
+        
+        conf_matrix_2 = confusion_openset(
+            np.concatenate(true_mapped_labels), 
+            np.concatenate(predictions), 
+            np.concatenate(true_unmapped_labels), 
+            val_label_values, 
+            unknown_label_values)
+
+    # Remove ignored labels from confusions
+    conf_matrix_1 = np.delete(conf_matrix_1, 0, axis=0)
+    conf_matrix_1 = np.delete(conf_matrix_1, 0, axis=1)
+    
+    if args.task_set != 2:
+        conf_matrix_2 = np.delete(conf_matrix_2, 0, axis=0)
+        conf_matrix_2 = np.delete(conf_matrix_2, 0, axis=1)
+
+    # Balance with real validation proportions
+    if args.task_set == 2:
+        conf_matrix_1 = conf_matrix_1.T
+        conf_matrix_1 = conf_matrix_1.astype(np.float64)
+        conf_matrix_1 /= np.expand_dims((np.sum(conf_matrix_1, axis=1) + 1e-6), 0)
+        y_labels = np.array(test_dataset.label_names)[1:]
+        x_labels = y_labels
+        
+        plt.figure(figsize = (30,10))
+        sns.heatmap(conf_matrix_1, xticklabels=x_labels, yticklabels=y_labels, cmap='Blues', robust=True, square=True)
+        plt.xlabel('Groundtruth Class')
+        plt.ylabel('Detected Class')
+        plt.subplots_adjust(bottom=0.15)
+        plt.show()
+        plt.savefig('confusion_matrix_ts{}_balanced.png'.format(args.task_set))
+    
+    else:
+        
+        # Meghs
+        
+        # Unknown to known confusion
+        conf_matrix_1 = conf_matrix_1.T
+        unk_to_known_conf = np.zeros(conf_matrix_2.shape)
+        unk_to_known_conf[:, k:] = conf_matrix_2[:, k:]
+        unk_to_known_conf[:, :k] = conf_matrix_1[:-1, :k]
+        unk_to_known_conf /= np.expand_dims(np.sum(unk_to_known_conf, axis = 0)+ 1e-6, 0)
+        
+        unk_to_known_y_labels = np.array(test_dataset.label_names)[1:-1]
+        unk_to_known_x_labels = np.concatenate([unk_to_known_y_labels, test_dataset.unknown_label_names])
+        
+        plt.figure(figsize = (20,10))
+        sns.heatmap(unk_to_known_conf, xticklabels=unk_to_known_x_labels, yticklabels=unk_to_known_y_labels, cmap='Blues', robust=True, square=True)
+        plt.xlabel('Groundtruth Class')
+        plt.ylabel('Detected Class')
+        plt.subplots_adjust(bottom=0.15)
+        plt.show()
+        plt.savefig('extended_confusion_matrix_ts{}_balanced.png'.format(args.task_set))
+        
+        # Known to Unknown confusion
+        conf_matrix = conf_matrix_1.astype(np.float64)
+        conf_matrix /= np.expand_dims(np.sum(conf_matrix, axis=0)+ 1e-6, 0)
+        y_labels = np.array(test_dataset.label_names)[1:]
+        x_labels = y_labels
+        
+        plt.figure(figsize = (20,10))
+        sns.heatmap(conf_matrix, xticklabels=x_labels, yticklabels=y_labels, cmap='Blues', robust=True, square=True)
+        plt.xlabel('Groundtruth Class')
+        plt.ylabel('Detected Class')
+        plt.subplots_adjust(bottom=0.15)
+        plt.show()
+        plt.savefig('normal_confusion_matrix_ts{}_balanced.png'.format(args.task_set))
+
+        # Meghs
+    

@@ -413,6 +413,16 @@ class KPFCNN(nn.Module):
         # List of valid labels (those not ignored in loss)
         self.valid_labels = np.sort([c for c in lbl_values if c not in ign_lbls])
 
+        # thing classes
+        if config.task_set == 0:
+            self.things = 3
+        elif config.task_set == 1:
+            self.things = 4
+        elif config.task_set == 2:
+            self.things = 7
+        else:
+            self.things = 9
+
         # Choose segmentation loss
         if len(config.class_w) > 0:
             class_w = torch.from_numpy(np.array(config.class_w, dtype=np.float32))
@@ -535,7 +545,8 @@ class KPFCNN(nn.Module):
         counter = 0
         ins_id = 1
         while True:
-            ins_idxs = torch.where((predicted < 9) & (predicted != 0) & (ins_prediction == 0))
+            # ins_idxs = torch.where((predicted < 9) & (predicted != 0) & (ins_prediction == 0))
+            ins_idxs = torch.where((predicted < self.things) & (predicted != 0) & (ins_prediction == 0))
             if len(ins_idxs[0]) == 0:
                 break
             ins_centers = centers_output[ins_idxs]
@@ -594,7 +605,7 @@ class KPFCNN(nn.Module):
         ins_id = next_ins_id
 
         while True:
-            ins_idxs = torch.where((predicted < 9) & (predicted != 0) & (ins_prediction == 0))
+            ins_idxs = torch.where((predicted < self.things) & (predicted != 0) & (ins_prediction == 0))
             if len(ins_idxs[0]) == 0:
                 break
             ins_centers = centers_output[ins_idxs]

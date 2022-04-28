@@ -75,9 +75,9 @@ class PanopticEval:
     union = np.maximum(union, self.eps)
     iou = intersection.astype(np.double) / union.astype(np.double)
     iou_mean = (intersection[self.include].astype(np.double) / union[self.include].astype(np.double)).mean()
-    #prec = tp / (tp+fp)
-    #recall = tp / (tp+fn)
-    return iou_mean, iou  # returns "iou mean", "iou per class" ALL CLASSES
+    # prec = tp / (tp+fp+self.eps)
+    # recall = tp / (tp+fn+self.eps)
+    return iou_mean, iou  # returns "iou mean", "iou per class"
 
   def getSemAcc(self):
     tp, fp, fn = self.getSemIoUStats()
@@ -187,7 +187,7 @@ class PanopticEval:
     # now do the panoptic stuff
     self.addBatchPanoptic(x_sem, x_inst, y_sem, y_inst)
 
-
+    
 class Panoptic4DEval:
   """ Panoptic evaluation using numpy
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # This file is covered by the LICENSE file in the root of this project.
-#https://github.com/PRBonn/semantic-kitti-ap
+#https://github.com/PRBonn/semantic-kitti-api
 import argparse
 import os
 import yaml
@@ -59,6 +59,15 @@ if __name__ == '__main__':
       ' Defaults to %(default)s',
   )
   parser.add_argument(
+      '--task_set',
+      '-t',
+      type=int,
+      required=True,
+      default=2,
+      help='Task set to evaluate'
+      ' Defaults to %(default)s',
+  )
+  parser.add_argument(
       '--min_inst_points',
       type=int,
       required=False,
@@ -67,6 +76,7 @@ if __name__ == '__main__':
   )
   parser.add_argument(
       '--output',
+      '-o',
       type=str,
       required=False,
       default=None,
@@ -91,7 +101,11 @@ if __name__ == '__main__':
   print("Limit: ", FLAGS.limit)
   print("Min instance points: ", FLAGS.min_inst_points)
   print("Output directory", FLAGS.output)
+  print("Task set:", FLAGS.task_set)
   print("*" * 80)
+
+  if not os.path.exists(FLAGS.output):
+    os.makedirs(FLAGS.output)
 
   # assert split
   assert (FLAGS.split in splits)
@@ -101,9 +115,9 @@ if __name__ == '__main__':
 
   # get number of interest classes, and the label mappings
   # class
-  class_remap = DATA["learning_map"]
-  class_inv_remap = DATA["learning_map_inv"]
-  class_ignore = DATA["learning_ignore"]
+  class_remap = DATA["task_set_map"][FLAGS.task_set]["learning_map"]
+  class_inv_remap = DATA["task_set_map"][FLAGS.task_set]["learning_map_inv"]
+  class_ignore = DATA["task_set_map"][FLAGS.task_set]["learning_ignore"]
   nr_classes = len(class_inv_remap)
   class_strings = DATA["labels"]
 
@@ -165,7 +179,7 @@ if __name__ == '__main__':
     # open label
 
     label = np.fromfile(label_file, dtype=np.uint32)
-
+    
     u_label_sem_class = class_lut[label & 0xFFFF]  # remap to xentropy format
     u_label_inst = label >> 16
     if FLAGS.limit is not None:
@@ -174,7 +188,7 @@ if __name__ == '__main__':
       u_label_inst = u_label_inst[:FLAGS.limit]
 
     label = np.fromfile(pred_file, dtype=np.uint32)
-
+    
     u_pred_sem_class = class_lut[label & 0xFFFF]  # remap to xentropy format
     u_pred_inst = label >> 16
     if FLAGS.limit is not None:
@@ -192,6 +206,14 @@ if __name__ == '__main__':
   class_PQ, class_SQ, class_RQ, class_all_PQ, class_all_SQ, class_all_RQ = class_evaluator.getPQ()
   class_IoU, class_all_IoU = class_evaluator.getSemIoU()
 
+  # Ani:
+  class_all_Prec = class_evaluator.pan_tp.astype(np.double) / np.maximum(
+      class_evaluator.pan_tp.astype(np.double) + 
+      class_evaluator.pan_fp.astype(np.double), class_evaluator.eps)
+  class_all_Recall = class_evaluator.pan_tp.astype(np.double) / np.maximum(
+      class_evaluator.pan_tp.astype(np.double) + 
+      class_evaluator.pan_fn.astype(np.double), class_evaluator.eps)
+
   # now make a nice dictionary
   output_dict = {}
 
@@ -203,7 +225,10 @@ if __name__ == '__main__':
   class_all_SQ = class_all_SQ.flatten().tolist()
   class_all_RQ = class_all_RQ.flatten().tolist()
   class_IoU = class_IoU.item()
+  # Ani
   class_all_IoU = class_all_IoU.flatten().tolist()
+  class_all_Prec = class_all_Prec.flatten().tolist()
+  class_all_Recall = class_all_Recall.flatten().tolist()
 
   # fill in with the raw values
   # output_dict["raw"] = {}
@@ -216,11 +241,19 @@ if __name__ == '__main__':
   # output_dict["raw"]["class_IoU"] = class_IoU
   # output_dict["raw"]["class_all_IoU"] = class_all_IoU
 
-  things = ['car', 'truck', 'bicycle', 'motorcycle', 'other-vehicle', 'person', 'bicyclist', 'motorcyclist']
-  stuff = [
-      'road', 'sidewalk', 'parking', 'other-ground', 'building', 'vegetation', 'trunk', 'terrain', 'fence', 'pole',
-      'traffic-sign'
-  ]
+  if FLAGS.task_set == 0:
+    things = ['car', 'person', 'unknown']
+    stuff = ['road', 'building', 'vegetation', 'fence']
+  if FLAGS.task_set == 1:
+    things = ['car', 'person', 'truck', 'unknown']
+    stuff = ['road', 'building', 'vegetation', 'fence', 'sidewalk', 'terrain', 'pole']
+  elif FLAGS.task_set == 2:
+    # things = ['car', 'truck', 'bicycle', 'motorcycle', 'other-vehicle', 'person', 'bicyclist', 'motorcyclist']
+    things = ['car', 'truck', 'bicycle', 'motorcycle', 'other-vehicle', 'person']
+    stuff = [
+        'road', 'sidewalk', 'parking', 'other-ground', 'building', 'vegetation', 'trunk', 'terrain', 'fence', 'pole',
+        'traffic-sign'
+    ]
   all_classes = things + stuff
 
   # class
@@ -240,8 +273,12 @@ if __name__ == '__main__':
     output_dict[class_str]["SQ"] = sq
     output_dict[class_str]["RQ"] = rq
     output_dict[class_str]["IoU"] = iou
-
+    # Ani
+    output_dict[class_str]["Prec"] = class_all_Prec[idx]
+    output_dict[class_str]["Recall"] = class_all_Recall[idx]
+  
   PQ_all = np.mean([float(output_dict[c]["PQ"]) for c in all_classes])
+  PQ_known = np.mean([float(output_dict[c]["PQ"]) for c in all_classes if c != 'unknown'])
   PQ_dagger = np.mean([float(output_dict[c]["PQ"]) for c in things] + [float(output_dict[c]["IoU"]) for c in stuff])
   RQ_all = np.mean([float(output_dict[c]["RQ"]) for c in all_classes])
   SQ_all = np.mean([float(output_dict[c]["SQ"]) for c in all_classes])
@@ -254,9 +291,15 @@ if __name__ == '__main__':
   RQ_stuff = np.mean([float(output_dict[c]["RQ"]) for c in stuff])
   SQ_stuff = np.mean([float(output_dict[c]["SQ"]) for c in stuff])
   mIoU = output_dict["all"]["IoU"]
+  known_IoU = np.mean([float(output_dict[c]["IoU"]) for c in all_classes if c != 'unknown'])
+  # Ani
+  if FLAGS.task_set != 2:
+    PQ_unknown = output_dict["unknown"]["PQ"]
+    unknown_IoU = output_dict["unknown"]["IoU"]
 
   codalab_output = {}
   codalab_output["pq_mean"] = float(PQ_all)
+  codalab_output["pq_known_mean"] = float(PQ_known)
   codalab_output["pq_dagger"] = float(PQ_dagger)
   codalab_output["sq_mean"] = float(SQ_all)
   codalab_output["rq_mean"] = float(RQ_all)
@@ -267,6 +310,11 @@ if __name__ == '__main__':
   codalab_output["pq_things"] = float(PQ_things)
   codalab_output["rq_things"] = float(RQ_things)
   codalab_output["sq_things"] = float(SQ_things)
+  codalab_output["known_IoU"] = float(known_IoU)
+  # Ani
+  if FLAGS.task_set != 2:
+    codalab_output["pq_unknown_mean"] = float(PQ_unknown)
+    codalab_output["unknown_IoU"] = float(unknown_IoU)
 
   print("Completed in {} s".format(complete_time))
 
@@ -274,12 +322,15 @@ if __name__ == '__main__':
     table = []
     for cl in all_classes:
       entry = output_dict[cl]
+      # Ani
       table.append({
           "class": cl,
           "pq": "{:.3}".format(entry["PQ"]),
           "sq": "{:.3}".format(entry["SQ"]),
           "rq": "{:.3}".format(entry["RQ"]),
-          "iou": "{:.3}".format(entry["IoU"])
+          "iou": "{:.3}".format(entry["IoU"]),
+          "prec": "{:.3}".format(entry["Prec"]),
+          "recall": "{:.3}".format(entry["Recall"]),
       })
 
     print("Generating output files.")
@@ -312,7 +363,9 @@ if __name__ == '__main__':
               {title: "PQ", field:"pq", width:100, align: "center"},
               {title: "SQ", field:"sq", width:100, align: "center"},
               {title: "RQ", field:"rq", width:100, align: "center"},
-              {title: "IoU", field:"iou", width:100, align: "center"}]
+              {title: "IoU", field:"iou", width:100, align: "center"},
+              {title: "Prec", field:"prec", width:100, align: "center"},
+              {title: "Recall", field:"recall", width:100, align: "center"}]
   });
 </script>
 </body>

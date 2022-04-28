@@ -45,8 +45,6 @@ from models.blocks import KPConv
 
 import pdb
 
-import wandb
-
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -55,7 +53,7 @@ import wandb
 #
 
 
-class ModelTrainer:
+class ModelTrainerKittiRaw:
 
     # Initialization methods
     # ------------------------------------------------------------------------------------------------------------------
@@ -197,8 +195,7 @@ class ModelTrainer:
                 remove(PID_file)
 
             self.step = 0
-            losses = []
-            for i, batch in enumerate(training_loader):
+            for batch in training_loader:
 
                 # Check kill signal (running_PID.txt deleted)
                 if config.saving and not exists(PID_file):
@@ -258,12 +255,6 @@ class ModelTrainer:
                                          1000 * mean_dt[1],
                                          1000 * mean_dt[2]))
 
-                # log to wandb
-                if config.wandb:
-                    losses.append(loss.item())
-                    
-
-
                 # Log file
                 if config.saving:
                     with open(join(config.saving_path, 'training.txt'), "a") as file:
@@ -276,14 +267,7 @@ class ModelTrainer:
                                                   t[-1] - t0))
 
                 self.step += 1
-            
-            if config.wandb:
-                loss_val = np.mean(np.array(losses))
-                wandb.log({
-                            'Train/Epoch': epoch,
-                            'Train/Loss': loss_val,
-                            
-                        })
+
             ##############
             # End of epoch
             ##############
@@ -317,7 +301,8 @@ class ModelTrainer:
                     checkpoint_path = join(checkpoint_directory, 'chkp_{:04d}.tar'.format(self.epoch + 1))
                     torch.save(save_dict, checkpoint_path)
 
-            if epoch % 20 == 0:
+
+            if epoch % 40 == 0:
                 # Validation
                 net.eval()
                 self.optimizer.zero_grad()
@@ -743,7 +728,7 @@ class ModelTrainer:
         mean_dt = np.zeros(1)
 
         t1 = time.time()
-        losses = []
+
         # Start validation loop
         for i, batch in enumerate(val_loader):
 
@@ -763,16 +748,6 @@ class ModelTrainer:
             with torch.no_grad():
                 outputs, centers_output, var_output, embedding = net(batch, config)
                 probs = softmax(outputs).cpu().detach().numpy()
-
-                # log to wandb
-                if config.wandb:
-                    loss = net.loss(
-                        outputs, centers_output, var_output, embedding, 
-                        batch.labels, batch.ins_labels, batch.centers, 
-                        batch.points, batch.times.unsqueeze(1))
-                    losses.append(loss.item())
-                    
-                    
 
                 if not config.pre_train and self.epoch > 50:
                     for l_ind, label_value in enumerate(val_loader.dataset.label_values):
@@ -838,7 +813,10 @@ class ModelTrainer:
 
                 # Predicted labels
                 preds = val_loader.dataset.label_values[np.argmax(proj_probs, axis=1)]
-
+                #Megs
+                if not exists(join(config.saving_path, 'val_preds', val_loader.dataset.sequences[s_ind][:10])):
+                    makedirs(join(config.saving_path, 'val_preds', val_loader.dataset.sequences[s_ind][:10]))
+                
                 # Save predictions in a binary file
                 filename = '{:s}_{:07d}.npy'.format(val_loader.dataset.sequences[s_ind], f_ind)
                 filename_c = '{:s}_{:07d}_c.npy'.format(val_loader.dataset.sequences[s_ind], f_ind)
@@ -869,9 +847,9 @@ class ModelTrainer:
                 np.save(filepath_c, center_preds)
                 np.save(filepath_i, ins_preds)
                 np.save(filepath_e, emb_preds)
-
-                centers_gt = batch.val_centers.cpu().detach().numpy()
-                #ins_label_gt = batch.val_ins_labels.cpu().detach().numpy()
+                
+                centers_gt = batch.centers.cpu().detach().numpy()
+                #ins_label_gt = batch.ins_labels.cpu().detach().numpy()
 
                 center_gt = centers_gt[:, 0]
 
@@ -883,9 +861,9 @@ class ModelTrainer:
                 # Save some of the frame pots
                 if f_ind % 20 == 0:
                     
-                    seq_path = join(val_loader.dataset.path, 'sequences', val_loader.dataset.sequences[s_ind])
-                    velo_file = join(seq_path, 'velodyne', val_loader.dataset.frames[s_ind][f_ind] + '.bin')
-
+                    seq_path = join(val_loader.dataset.path, val_loader.dataset.sequences[s_ind])
+                    velo_file = join(seq_path, 'velodyne_points', 'data', val_loader.dataset.frames[s_ind][f_ind] + '.bin')
+                    
                     frame_points = np.fromfile(velo_file, dtype=np.float32)
                     frame_points = frame_points.reshape((-1, 4))
                     write_ply(filepath[:-4] + '_pots.ply',
@@ -893,12 +871,6 @@ class ModelTrainer:
                               ['x', 'y', 'z', 'gt', 'pre'])
 
                 
-                # Update validation confusions
-                frame_C = fast_confusion(frame_labels,
-                                        frame_preds.astype(np.int32),
-                                        val_loader.dataset.label_values)
-                val_loader.dataset.val_confs[s_ind][f_ind, :, :] = frame_C
-
                 # Stack all prediction for this epoch
                 predictions += [preds]
                 targets += [frame_labels[proj_mask]]
@@ -919,107 +891,6 @@ class ModelTrainer:
                                      1000 * (mean_dt[1])))
 
         t2 = time.time()
-        
-        if config.wandb:
-            losses = np.array(losses)
-            loss_val = np.mean(losses)
-            wandb.log({
-                            'Validation/Loss': loss_val,
-                            'Validation/Step': self.epoch // 20,
-                        })
-
-        # Confusions for our subparts of validation set
-        Confs = np.zeros((len(predictions), nc_tot, nc_tot), dtype=np.int32)
-        for i, (preds, truth) in enumerate(zip(predictions, targets)):
-            # Confusions
-            Confs[i, :, :] = fast_confusion(truth, preds, val_loader.dataset.label_values).astype(np.int32)
-
-        t3 = time.time()
-
-        #######################################
-        # Results on this subpart of validation
-        #######################################
-
-        # Sum all confusions
-        C = np.sum(Confs, axis=0).astype(np.float32)
-
-        # Balance with real validation proportions
-        C *= np.expand_dims(val_loader.dataset.class_proportions / (np.sum(C, axis=1) + 1e-6), 1)
-
-        # Remove ignored labels from confusions
-        for l_ind, label_value in reversed(list(enumerate(val_loader.dataset.label_values))):
-            if label_value in val_loader.dataset.ignored_labels:
-                C = np.delete(C, l_ind, axis=0)
-                C = np.delete(C, l_ind, axis=1)
-
-        # Objects IoU
-        IoUs = IoU_from_confusions(C)
-
-        #####################################
-        # Results on the whole validation set
-        #####################################
-
-        t4 = time.time()
-
-        # Sum all validation confusions
-        C_tot = [np.sum(seq_C, axis=0) for seq_C in val_loader.dataset.val_confs if len(seq_C) > 0]
-        C_tot = np.sum(np.stack(C_tot, axis=0), axis=0)
-
-        if debug:
-            s = '\n'
-            for cc in C_tot:
-                for c in cc:
-                    s += '{:8.1f} '.format(c)
-                s += '\n'
-            print(s)
-
-        # Remove ignored labels from confusions
-        for l_ind, label_value in reversed(list(enumerate(val_loader.dataset.label_values))):
-            if label_value in val_loader.dataset.ignored_labels:
-                C_tot = np.delete(C_tot, l_ind, axis=0)
-                C_tot = np.delete(C_tot, l_ind, axis=1)
-
-        # Objects IoU
-        val_IoUs = IoU_from_confusions(C_tot)
-
-        t5 = time.time()
-
-        # Saving (optionnal)
-        if config.saving:
-
-            IoU_list = [IoUs, val_IoUs]
-            file_list = ['subpart_IoUs.txt', 'val_IoUs.txt']
-            for IoUs_to_save, IoU_file in zip(IoU_list, file_list):
-
-                # Name of saving file
-                test_file = join(config.saving_path, IoU_file)
-
-                # Line to write:
-                line = ''
-                for IoU in IoUs_to_save:
-                    line += '{:.3f} '.format(IoU)
-                line = line + '\n'
-
-                # Write in file
-                if exists(test_file):
-                    with open(test_file, "a") as text_file:
-                        text_file.write(line)
-                else:
-                    with open(test_file, "w") as text_file:
-                        text_file.write(line)
-
-        # Print instance mean
-        mIoU = 100 * np.mean(IoUs)
-        print('{:s} : subpart mIoU = {:.1f} %'.format(config.dataset, mIoU))
-        mIoU = 100 * np.mean(val_IoUs)
-        print('{:s} :     val mIoU = {:.1f} %'.format(config.dataset, mIoU))
-        cIoU = 200 * np.mean(c_ious)
-        print('{:s} :     val center mIoU = {:.1f} %'.format(config.dataset, cIoU))
-        sIoU = np.mean(s_ious)
-        print('{:s} :     val centers sum  = {:.1f} %'.format(config.dataset, sIoU))
-
-
-        t6 = time.time()
 
         # Display timings
         if debug:
@@ -1028,10 +899,6 @@ class ModelTrainer:
             print('Init ...... {:.1f}s'.format(t1 - t0))
             print('Loop ...... {:.1f}s'.format(t2 - t1))
             
-            print('Confs ..... {:.1f}s'.format(t3 - t2))
-            print('IoU1 ...... {:.1f}s'.format(t4 - t3))
-            print('IoU2 ...... {:.1f}s'.format(t5 - t4))
-            print('Save ...... {:.1f}s'.format(t6 - t5))
             print('\n************************\n')
 
         return

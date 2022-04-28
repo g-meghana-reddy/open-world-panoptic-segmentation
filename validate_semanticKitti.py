@@ -1,20 +1,3 @@
-#
-#
-#      0=================================0
-#      |    Kernel Point Convolutions    |
-#      0=================================0
-#
-#
-# ----------------------------------------------------------------------------------------------------------------------
-#
-#      Callable script to start a training on SemanticKitti dataset
-#
-# ----------------------------------------------------------------------------------------------------------------------
-#
-#      Hugues THOMAS - 06/03/2020
-#
-
-
 # ----------------------------------------------------------------------------------------------------------------------
 #
 #           Imports and global variables
@@ -30,9 +13,14 @@ from datasets.SemanticKitti import *
 from models.architectures import KPFCNN
 from utils.config import Config
 from utils.trainer import ModelTrainer
+from utils.tester import ModelTester
 
-import wandb
 import pdb
+
+np.random.seed(0)
+torch.manual_seed(0)
+torch.cuda.manual_seed_all(0)
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -173,7 +161,7 @@ class SemanticKittiConfig(Config):
     epoch_steps = 500
 
     # Number of validation examples per epoch
-    validation_size = 200
+    validation_size = 4071 #200
 
     # Number of epoch between each checkpoint
     checkpoint_gap = 50
@@ -207,9 +195,6 @@ class SemanticKittiConfig(Config):
 
     # Only train class and center head
     pre_train = False
-    
-    # use wandb for logging
-    wandb = False
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -220,11 +205,9 @@ class SemanticKittiConfig(Config):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=2)
-    parser.add_argument("-s", "--saving_path", help="Path to save predictions", default=None)
     parser.add_argument("-p", "--prev_train_path", help="Directory to load checkpoint", default=None)
-    parser.add_argument("-i", "--chkp_idx", help="Index of checkpoint", type=int, default=2)
-    parser.add_argument("--pretrain", action="store_true", help="Pretrain network")
-    parser.add_argument("--wandb", action="store_true", help="Use wandb for logging")
+    parser.add_argument("-i", "--chkp_idx", help="Index of checkpoint", type=int, default=None)
+    parser.add_argument("-s", "--saving_path", help="Path to save checkpoints", default=None)
     args = parser.parse_args()
     return args
 
@@ -250,9 +233,6 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = GPU_ID
 
     args = parse_args()
-    
-    if args.wandb:
-        wandb.init(project="mscv-capstone")
 
     ###############
     # Previous chkp
@@ -260,11 +240,7 @@ if __name__ == '__main__':
 
     # Choose here if you want to start training from a previous snapshot (None for new training)
 
-    # previous_training_path = 'Log_2020-06-05_17-18-35'
-    # previous_training_path = 'Log_2020-10-06_16-51-05'#'Log_2020-08-30_01-29-20'
-    # previous_training_path = ''
     # Choose index of checkpoint to start from. If None, uses the latest chkp
-    # chkp_idx = None
     previous_training_path = args.prev_train_path
     chkp_idx = args.chkp_idx
     if previous_training_path:
@@ -296,8 +272,6 @@ if __name__ == '__main__':
     config = SemanticKittiConfig()
     if previous_training_path:
         config.load(os.path.join('results', previous_training_path))
-        config.saving_path = None
-    config.pre_train = args.pretrain
     config.free_dim = 4
     config.n_frames = 1 # 2
     config.reinit_var = True
@@ -306,89 +280,53 @@ if __name__ == '__main__':
     #config.sampling = 'objectness'
     config.sampling = 'importance'
     config.decay_sampling = 'None'
-    # Get path from argument if given
-    # if len(sys.argv) > 1:
-    #     config.saving_path = sys.argv[1]
 
     config.task_set = args.task_set
     config.saving_path = args.saving_path
-    config.wandb = args.wandb
+    # Modified to calculate validation score for all validation set
+    config.validation_size = 2671
 
-    if config.pre_train:
-        config.max_epoch = 200
-        config.learning_rate = 1e-2
-    else:
-        config.max_epoch = 800
-        config.learning_rate = 1e-3
-    config.lr_decays = {i: 0.1 ** (1 / 200) for i in range(1, config.max_epoch)}
-
-    # Initialize datasets
-    training_dataset = SemanticKittiDataset(config, set='training',
-                                            balance_classes=True)
+    # Initialize datasetss
     test_dataset = SemanticKittiDataset(config, set='validation',
-                                        balance_classes=False)
+                                        balance_classes=False, seqential_batch=True)
 
     # Initialize samplers
-    training_sampler = SemanticKittiSampler(training_dataset)
     test_sampler = SemanticKittiSampler(test_dataset)
 
     # Initialize the dataloader
-    training_loader = DataLoader(training_dataset,
-                                 batch_size=1,
-                                 sampler=training_sampler,
-                                 collate_fn=SemanticKittiCollate,
-                                 num_workers=config.input_threads,
-                                 pin_memory=True)
     test_loader = DataLoader(test_dataset,
                              batch_size=1,
                              sampler=test_sampler,
                              collate_fn=SemanticKittiCollate,
-                             num_workers=config.input_threads,
+                             num_workers=0, # config.input_threads,
                              pin_memory=True)
 
+    #import pdb;pdb.set_trace()
     # Calibrate max_in_point value
-    training_sampler.calib_max_in(config, training_loader, verbose=True)
     test_sampler.calib_max_in(config, test_loader, verbose=True)
 
     # Calibrate samplers
-    training_sampler.calibration(training_loader, verbose=True)
     test_sampler.calibration(test_loader, verbose=True)
-
-    # debug_timing(training_dataset, training_loader)
-    # debug_timing(test_dataset, test_loader)
-    # debug_class_w(training_dataset, training_loader)
 
     print('\nModel Preparation')
     print('*****************')
 
     # Define network model
     t1 = time.time()
-    net = KPFCNN(config, training_dataset.label_values, training_dataset.ignored_labels)
-
-    debug = False
-    if debug:
-        print('\n*************************************\n')
-        print(net)
-        print('\n*************************************\n')
-        for param in net.parameters():
-            if param.requires_grad:
-                print(param.shape)
-        print('\n*************************************\n')
-        print("Model size %i" % sum(param.numel() for param in net.parameters() if param.requires_grad))
-        print('\n*************************************\n')
+    net = KPFCNN(config, test_dataset.label_values, test_dataset.ignored_labels)
 
     # Define a trainer class
-    if previous_training_path:
-        trainer = ModelTrainer(net, config, chkp_path=chosen_chkp)
-    else:
-        trainer = ModelTrainer(net, config, chkp_path=chosen_chkp)
+    #trainer = ModelTrainer(net, config, chkp_path=chosen_chkp)
+    tester = ModelTester(net, chkp_path=chosen_chkp)
     print('Done in {:.1f}s\n'.format(time.time() - t1))
 
-    print('\nStart training')
+    print('\nStart validation')
     print('**************')
 
-    # Training
-    trainer.train(net, training_loader, test_loader, config)
+    # Validation
+    net.eval()
+    #trainer.validation(net, test_loader, config)
+    tester.slam_segmentation_test(net, test_loader, config)
 
     print('Forcing exit now')
     os.kill(os.getpid(), signal.SIGINT)
