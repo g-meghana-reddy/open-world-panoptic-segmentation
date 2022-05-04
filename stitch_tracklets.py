@@ -234,7 +234,7 @@ def main(FLAGS):
             points = new_points[:, :3]
 
             things = (label_sem_class < things_label_max) & (label_sem_class > 0)
-            ins_ids = np.unique(label_inst)
+            ins_ids = np.unique(label_inst * things)
 
             if os.path.exists(fet_path):
                 features = np.load(fet_path, allow_pickle=True).tolist()

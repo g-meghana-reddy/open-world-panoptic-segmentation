@@ -91,10 +91,10 @@ def main(FLAGS):
                 ind = np.where(unknown_inst == ins_id)
                 point_ind = point_indexes_unknown[ind]
 
-                if ind[0].shape[0] >= 2:
+                if ind[0].shape[0] >= 24:
                     bbox, kalman_bbox = get_bbox_from_points(unknown_points[ind])
                     bboxes.append(kalman_bbox.numpy())
-                    # bbox2points[kalman_bbox.numpy().tobytes()] = point_ind
+                    #bbox2points[kalman_bbox.numpy().tobytes()] = point_ind
 
             if len(bboxes):
                 dets = np.stack(bboxes, axis=0)
@@ -109,6 +109,8 @@ def main(FLAGS):
             trackers = mot_tracker.update(dets_all)
             cycle_time = time.time() - start_time
             total_time += cycle_time
+            
+#TODO: Remove Outliers!!!!!
 
 #             save_trk_file = os.path.join('.', '%06d.txt' % idx)
 #             save_bbox2point_file = os.path.join('.', '%06d_bbox2points.txt' % idx)

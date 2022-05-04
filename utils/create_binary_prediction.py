@@ -8,16 +8,17 @@ MAX_PROCESSOR = 8
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=MAX_PROCESSOR)
 jobs = []
 
-task_set = 2
+task_set = 0
 config_file = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti.yaml'
-log_dir = '/project_data/ramanan/achakrav/4D-PLS/results/validation/TS{}'.format(task_set)
-prediction_path = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}/val_probs'.format(task_set)
+log_dir = '/project_data/ramanan/mganesin/4D-PLS/results_baseline/validation/TS{}'.format(task_set)
+prediction_path = '/project_data/ramanan/mganesin/4D-PLS/test_baseline/val_preds_TS{}/val_probs'.format(task_set)
 save_path = log_dir
 data_dir = '../data/SemanticKitti/'
 
 on_val = True
 tracked_unknown = False
-if task_set < 2:
+baseline = True
+if task_set < 2 and not baseline:
     if tracked_unknown:
         ins_ext = 't'
     else:

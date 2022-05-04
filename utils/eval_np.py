@@ -187,7 +187,7 @@ class PanopticEval:
     # now do the panoptic stuff
     self.addBatchPanoptic(x_sem, x_inst, y_sem, y_inst)
 
-
+    
 class Panoptic4DEval:
   """ Panoptic evaluation using numpy
 

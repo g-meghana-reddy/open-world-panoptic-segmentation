@@ -7,6 +7,7 @@
 # Common libs
 import argparse
 import signal
+import glob
 
 # Dataset
 from datasets.SemanticKitti import *
@@ -283,12 +284,13 @@ if __name__ == '__main__':
 
     config.task_set = args.task_set
     config.saving_path = args.saving_path
-    # Modified to calculate validation score for all validation set
-    config.validation_size = 4071
+    # Modified to calculate validation score for all validation set 
+    seq_path = 'data/Kitti-Raw/2011_09_26/*/velodyne_points/data/*'
+    config.validation_size = len([f for f in glob.glob(seq_path) if f.endswith('.bin')])
 
     # Initialize datasetss
-    test_dataset = SemanticKittiDataset(config, set='validation',
-                                        balance_classes=False, seqential_batch=True)
+    test_dataset = SemanticKittiDataset(config, set='test',
+                                        balance_classes=False, seqential_batch=True, inference=True)
 
     # Initialize samplers
     test_sampler = SemanticKittiSampler(test_dataset)
@@ -301,6 +303,7 @@ if __name__ == '__main__':
                              num_workers=0, # config.input_threads,
                              pin_memory=True)
 
+    #import pdb;pdb.set_trace()
     # Calibrate max_in_point value
     test_sampler.calib_max_in(config, test_loader, verbose=True)
 
@@ -315,15 +318,26 @@ if __name__ == '__main__':
     net = KPFCNN(config, test_dataset.label_values, test_dataset.ignored_labels)
 
     # Define a trainer class
-    #trainer = ModelTrainer(net, config, chkp_path=chosen_chkp)
-    tester = ModelTester(net, chkp_path=chosen_chkp)
+    trainer = ModelTrainer(net, config, chkp_path=chosen_chkp)
     print('Done in {:.1f}s\n'.format(time.time() - t1))
 
     print('\nStart validation')
     print('**************')
 
     # Validation
-    tester.slam_segmentation_test(net, test_loader, config)
+    net.eval()
+    trainer.validation(net, test_loader, config)
+
+    # #Define a visualizer class
+    # tester = ModelTester(net, chkp_path=chosen_chkp)
+    # print('Done in {:.1f}s\n'.format(time.time() - t1))
+
+    # config.dataset_task = '4d_panoptic'
+
+    # if config.dataset_task == '4d_panoptic':
+    #     tester.panoptic_4d_test(net, test_loader, config)
+    # else:
+    #     raise ValueError('Unsupported dataset_task for testing: ' + config.dataset_task)
 
     print('Forcing exit now')
     os.kill(os.getpid(), signal.SIGINT)

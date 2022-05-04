@@ -17,3 +17,4 @@ hu-segmentation/kitti_raw_ts1_segmented
 hu-segmentation/ts1_trial
 hu-segmentation/semantic_kitti_ts0
 hu-segmentation/semantic_kitti_ts1
+scripts

@@ -178,6 +178,8 @@ if __name__ == '__main__':
     config.decay_sampling = 'None'
     config.stride = 1
     config.first_subsampling_dl = 0.061
+    config.task_set = args.task_set
+    config.saving_path = args.saving_path
 
     config.task_set = args.task_set
     config.saving_path = args.saving_path

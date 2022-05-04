@@ -222,29 +222,22 @@ class SemLaserScan(LaserScan):
     self.inst_color_lut_known /= 255.
     # self.inst_color_lut_known = np.array(sns.dark_palette("green", self.max_inst_id)) # green
     # self.inst_color_lut_unknown = np.array(sns.dark_palette("red", self.max_inst_id)) # red
-
+    
     #Meghana
     self.things = [10, 11, 15, 18, 20, 30, 100]
-
+    
     if not self.distinct:
         self.max_inst_id = 20
         # To add shades for known and unknown
-#         self.inst_color_lut_known = np.array(sns.cubehelix_palette(
-#             n_colors=self.max_inst_id, light=1, dark=0.2))
-#         self.inst_color_lut_unknown = np.array(sns.cubehelix_palette(
-#             n_colors=self.max_inst_id, start=2.8, rot=0.1, light=1, dark=0.2))
-        self.inst_color_lut_known = np.array(
-            sns.color_palette("flare", self.max_inst_id+2))[:self.max_inst_id]
-        self.inst_color_lut_unknown = np.array(
-            sns.color_palette("crest", self.max_inst_id+2))[:self.max_inst_id]
-
+        self.inst_color_lut_known = np.array(sns.color_palette("flare", self.max_inst_id))
+        self.inst_color_lut_unknown = np.array(sns.color_palette("crest", self.max_inst_id))
+        
+    
     else:
         self.max_inst_id = 20
         # To add different distinct colors for known instances and unknown instances
-        self.inst_color_lut_known = np.array(
-            sns.color_palette("Paired", self.max_inst_id))[:self.max_inst_id]
-        self.inst_color_lut_unknown = np.array(
-            sns.color_palette("Paired", self.max_inst_id))[:self.max_inst_id]
+        self.inst_color_lut_known = np.array(sns.color_palette("Paired", self.max_inst_id))
+        self.inst_color_lut_unknown = np.array(sns.color_palette("Paired", self.max_inst_id))
         
 #         self.inst_color_lut_known = np.random.uniform(low=0.0,high=1.0, size=(max_inst_id, 3))
 #         self.inst_color_lut_unknown = np.random.uniform(low=0.0,high=1.0, size=(max_inst_id, 3))

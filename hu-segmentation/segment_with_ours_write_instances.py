@@ -149,6 +149,10 @@ if __name__ == '__main__':
     sem_file_mask = []
     obj_file_mask = []
     ins_file_mask = []
+<<<<<<< HEAD
+=======
+    
+>>>>>>> origin/dev/meghana/4dpls
     for idx, file in enumerate(objsem_files):
         if '_c' in file:
             obj_file_mask.append(idx)
@@ -160,7 +164,11 @@ if __name__ == '__main__':
     objectness_files = objsem_files[obj_file_mask]
     semantic_files = objsem_files[sem_file_mask]
     instance_files = objsem_files[ins_file_mask]
+<<<<<<< HEAD
     
+=======
+
+>>>>>>> origin/dev/meghana/4dpls
     assert (len(semantic_files) == len(objectness_files))
     assert (len(semantic_files) == len(scan_files))
 
@@ -183,7 +191,11 @@ if __name__ == '__main__':
         instances = np.load(instance_file)
         parent_dir, ins_base = os.path.split(instance_file)
         segmented_file = os.path.join(parent_dir, ins_base.replace('_i', '_u'))
+<<<<<<< HEAD
 
+=======
+          
+>>>>>>> origin/dev/meghana/4dpls
         mask = labels == unk_label
         background_mask = labels != unk_label
 
