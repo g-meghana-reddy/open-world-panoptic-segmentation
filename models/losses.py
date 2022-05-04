@@ -21,7 +21,6 @@ def weighted_mse_loss(output, target, weights):
     return loss
 
 def pdf_normal(x, mean, var):
-
     eps = torch.ones_like(var,requires_grad=True, device=x.device) * 1e-5
     var_eps = var + eps
     var_seq = var_eps.squeeze()

@@ -22,6 +22,7 @@
 #
 
 # Common libs
+import argparse
 import signal
 import os
 import numpy as np
@@ -35,6 +36,8 @@ from torch.utils.data import DataLoader
 from utils.config import Config
 from utils.tester import ModelTester
 from models.architectures import KPCNN, KPFCNN
+
+import pdb
 
 np.random.seed(0)
 torch.manual_seed(0)
@@ -82,11 +85,28 @@ def model_choice(chosen_log):
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
+#           Parse args
+#       \******************/
+#
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=2)
+    parser.add_argument("-c", "--chosen_log", help="Path to load checkpoint log", default=None)
+    parser.add_argument("-s", "--saving_path", help="Path to save checkpoints", default=None)
+    args = parser.parse_args()
+    return args
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+#
 #           Main Call
 #       \***************/
 #
 
 if __name__ == '__main__':
+
+    args = parse_args()
 
     ###############################
     # Choose the model to visualize
@@ -97,7 +117,8 @@ if __name__ == '__main__':
     #       > 'last_XXX': Automatically retrieve the last trained model on dataset XXX
     #       > '(old_)results/Log_YYYY-MM-DD_HH-MM-SS': Directly provide the path of a trained model
 
-    chosen_log = 'results/Log_2020-10-06_16-51-05'  # => ModelNet40
+    # chosen_log = 'results/Log_2020-10-06_16-51-05'  # => ModelNet40
+    chosen_log = args.chosen_log # 'results/4DPLS_TS0'
 
     # Choose the index of the checkpoint to load OR None if you want to load the current checkpoint
     chkp_idx = None
@@ -144,19 +165,22 @@ if __name__ == '__main__':
     # Change parameters for the test here. For example, you can stop augmenting the input data.
 
     config.global_fet = False
-    config.validation_size = 200
+    config.validation_size = 4071 # 200
     config.input_threads = 16
-    config.n_frames = 4
-    config.n_test_frames = 4 #it should be smaller than config.n_frames
+    config.n_frames = 1 # 4
+    config.n_test_frames = 1 # 4 #it should be smaller than config.n_frames
     if config.n_frames < config.n_test_frames:
         config.n_frames = config.n_test_frames
     config.big_gpu = True
-    config.dataset_task = '4d_panoptic'
+    config.dataset_task = 'slam_segmentation' # '4d_panoptic'
     #config.sampling = 'density'
     config.sampling = 'importance'
     config.decay_sampling = 'None'
     config.stride = 1
     config.first_subsampling_dl = 0.061
+
+    config.task_set = args.task_set
+    config.saving_path = args.saving_path
 
 
     ##############
@@ -193,7 +217,7 @@ if __name__ == '__main__':
                              batch_size=1,
                              sampler=test_sampler,
                              collate_fn=collate_fn,
-                             num_workers=0,#config.input_threads,
+                             num_workers=config.input_threads,
                              pin_memory=True)
 
     # Calibrate samplers
@@ -218,13 +242,13 @@ if __name__ == '__main__':
     print('\nStart test')
     print('**********\n')
     
-    config.dataset_task = '4d_panoptic'
+    # config.dataset_task = '4d_panoptic'
     
     # Training
     if config.dataset_task == 'classification':
         a = 1/0
     elif config.dataset_task == 'cloud_segmentation':
-                tester.cloud_segmentation_test(net, test_loader, config)
+        tester.cloud_segmentation_test(net, test_loader, config)
     elif config.dataset_task == 'slam_segmentation':
         tester.slam_segmentation_test(net, test_loader, config)
     elif config.dataset_task == '4d_panoptic':

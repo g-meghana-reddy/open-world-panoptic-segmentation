@@ -43,6 +43,10 @@ from sklearn.neighbors import KDTree
 
 from models.blocks import KPConv
 
+import pdb
+
+import wandb
+
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -125,7 +129,7 @@ class ModelTrainer:
                 net.train()
                 print("Model restored and ready for finetuning.")
             else:
-                checkpoint = torch.load(chkp_path)
+                checkpoint = torch.load(chkp_path, map_location=self.device)
                 if config.reinit_var:
                     checkpoint['model_state_dict']['head_var.mlp.weight'] = net.head_var.mlp.weight
                     checkpoint['model_state_dict']['head_var.batch_norm.bias'] = net.head_var.batch_norm.bias
@@ -193,7 +197,8 @@ class ModelTrainer:
                 remove(PID_file)
 
             self.step = 0
-            for batch in training_loader:
+            losses = []
+            for i, batch in enumerate(training_loader):
 
                 # Check kill signal (running_PID.txt deleted)
                 if config.saving and not exists(PID_file):
@@ -253,6 +258,12 @@ class ModelTrainer:
                                          1000 * mean_dt[1],
                                          1000 * mean_dt[2]))
 
+                # log to wandb
+                if config.wandb:
+                    losses.append(loss.item())
+                    
+
+
                 # Log file
                 if config.saving:
                     with open(join(config.saving_path, 'training.txt'), "a") as file:
@@ -265,7 +276,14 @@ class ModelTrainer:
                                                   t[-1] - t0))
 
                 self.step += 1
-
+            
+            if config.wandb:
+                loss_val = np.mean(np.array(losses))
+                wandb.log({
+                            'Train/Epoch': epoch,
+                            'Train/Loss': loss_val,
+                            
+                        })
             ##############
             # End of epoch
             ##############
@@ -299,8 +317,7 @@ class ModelTrainer:
                     checkpoint_path = join(checkpoint_directory, 'chkp_{:04d}.tar'.format(self.epoch + 1))
                     torch.save(save_dict, checkpoint_path)
 
-
-            if epoch % 40 == 0:
+            if epoch % 20 == 0:
                 # Validation
                 net.eval()
                 self.optimizer.zero_grad()
@@ -726,7 +743,7 @@ class ModelTrainer:
         mean_dt = np.zeros(1)
 
         t1 = time.time()
-
+        losses = []
         # Start validation loop
         for i, batch in enumerate(val_loader):
 
@@ -746,6 +763,16 @@ class ModelTrainer:
             with torch.no_grad():
                 outputs, centers_output, var_output, embedding = net(batch, config)
                 probs = softmax(outputs).cpu().detach().numpy()
+
+                # log to wandb
+                if config.wandb:
+                    loss = net.loss(
+                        outputs, centers_output, var_output, embedding, 
+                        batch.labels, batch.ins_labels, batch.centers, 
+                        batch.points, batch.times.unsqueeze(1))
+                    losses.append(loss.item())
+                    
+                    
 
                 if not config.pre_train and self.epoch > 50:
                     for l_ind, label_value in enumerate(val_loader.dataset.label_values):
@@ -768,8 +795,10 @@ class ModelTrainer:
             r_inds_list = batch.reproj_inds
             r_mask_list = batch.reproj_masks
             labels_list = batch.val_labels
+            embedding = embedding.cpu().detach().numpy()
 
-            torch.cuda.synchronize(self.device)
+            if 'cuda' in self.device.type:
+                torch.cuda.synchronize(self.device)
 
             # Get predictions and labels per instance
             # ***************************************
@@ -786,18 +815,21 @@ class ModelTrainer:
                 frame_labels = labels_list[b_i]
                 s_ind = f_inds[b_i, 0]
                 f_ind = f_inds[b_i, 1]
+                emb = embedding[i0:i0 + length]
 
                 # Project predictions on the frame points
                 proj_probs = probs[proj_inds]
                 proj_center_probs = center_props[proj_inds]
                 proj_ins_probs = ins_probs[proj_inds]
                 #proj_offset_probs = offset_probs[proj_inds]
+                proj_emb = emb[proj_inds]
 
                 # Safe check if only one point:
                 if proj_probs.ndim < 2:
                     proj_probs = np.expand_dims(proj_probs, 0)
                     proj_center_probs = np.expand_dims(proj_center_probs, 0)
                     proj_ins_probs = np.expand_dims(proj_ins_probs, 0)
+                    proj_emb = np.expand_dims(proj_emb, 0)
 
                 # Insert false columns for ignored labels
                 for l_ind, label_value in enumerate(val_loader.dataset.label_values):
@@ -811,30 +843,35 @@ class ModelTrainer:
                 filename = '{:s}_{:07d}.npy'.format(val_loader.dataset.sequences[s_ind], f_ind)
                 filename_c = '{:s}_{:07d}_c.npy'.format(val_loader.dataset.sequences[s_ind], f_ind)
                 filename_i = '{:s}_{:07d}_i.npy'.format(val_loader.dataset.sequences[s_ind], f_ind)
+                filename_e = '{:s}_{:07d}_e.npy'.format(val_loader.dataset.sequences[s_ind], f_ind)
                 filepath = join(config.saving_path, 'val_preds', filename)
                 filepath_c = join(config.saving_path, 'val_preds', filename_c)
                 filepath_i = join(config.saving_path, 'val_preds', filename_i)
-
+                filepath_e = join(config.saving_path, 'val_preds', filename_e)
+                
                 if exists(filepath):
                     frame_preds = np.load(filepath)
                     center_preds = np.load(filepath_c)
                     ins_preds = np.load(filepath_i)
+                    emb_preds = np.load(filepath_e)
 
                 else:
                     frame_preds = np.zeros(frame_labels.shape, dtype=np.uint8)
                     center_preds = np.zeros(frame_labels.shape, dtype=np.float32)
                     ins_preds = np.zeros(frame_labels.shape, dtype=np.uint8)
+                    emb_preds = np.zeros((frame_labels.shape[0], config.first_features_dim), dtype=np.float32)
 
                 center_preds[proj_mask] = proj_center_probs[:, 0]
                 frame_preds[proj_mask] = preds.astype(np.uint8)
                 ins_preds[proj_mask] = proj_ins_probs
+                emb_preds[proj_mask] = proj_emb
                 np.save(filepath, frame_preds)
                 np.save(filepath_c, center_preds)
                 np.save(filepath_i, ins_preds)
+                np.save(filepath_e, emb_preds)
 
-
-                centers_gt = batch.centers.cpu().detach().numpy()
-                #ins_label_gt = batch.ins_labels.cpu().detach().numpy()
+                centers_gt = batch.val_centers.cpu().detach().numpy()
+                #ins_label_gt = batch.val_ins_labels.cpu().detach().numpy()
 
                 center_gt = centers_gt[:, 0]
 
@@ -845,18 +882,21 @@ class ModelTrainer:
 
                 # Save some of the frame pots
                 if f_ind % 20 == 0:
+                    
                     seq_path = join(val_loader.dataset.path, 'sequences', val_loader.dataset.sequences[s_ind])
                     velo_file = join(seq_path, 'velodyne', val_loader.dataset.frames[s_ind][f_ind] + '.bin')
+
                     frame_points = np.fromfile(velo_file, dtype=np.float32)
                     frame_points = frame_points.reshape((-1, 4))
                     write_ply(filepath[:-4] + '_pots.ply',
                               [frame_points[:, :3], frame_labels, frame_preds],
                               ['x', 'y', 'z', 'gt', 'pre'])
 
+                
                 # Update validation confusions
                 frame_C = fast_confusion(frame_labels,
-                                         frame_preds.astype(np.int32),
-                                         val_loader.dataset.label_values)
+                                        frame_preds.astype(np.int32),
+                                        val_loader.dataset.label_values)
                 val_loader.dataset.val_confs[s_ind][f_ind, :, :] = frame_C
 
                 # Stack all prediction for this epoch
@@ -879,6 +919,14 @@ class ModelTrainer:
                                      1000 * (mean_dt[1])))
 
         t2 = time.time()
+        
+        if config.wandb:
+            losses = np.array(losses)
+            loss_val = np.mean(losses)
+            wandb.log({
+                            'Validation/Loss': loss_val,
+                            'Validation/Step': self.epoch // 20,
+                        })
 
         # Confusions for our subparts of validation set
         Confs = np.zeros((len(predictions), nc_tot, nc_tot), dtype=np.int32)
@@ -979,6 +1027,7 @@ class ModelTrainer:
             print('Validation timings:')
             print('Init ...... {:.1f}s'.format(t1 - t0))
             print('Loop ...... {:.1f}s'.format(t2 - t1))
+            
             print('Confs ..... {:.1f}s'.format(t3 - t2))
             print('IoU1 ...... {:.1f}s'.format(t4 - t3))
             print('IoU2 ...... {:.1f}s'.format(t5 - t4))

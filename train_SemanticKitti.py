@@ -22,6 +22,7 @@
 #
 
 # Common libs
+import argparse
 import signal
 
 # Dataset
@@ -29,6 +30,10 @@ from datasets.SemanticKitti import *
 from models.architectures import KPFCNN
 from utils.config import Config
 from utils.trainer import ModelTrainer
+
+import wandb
+
+import pdb
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -54,6 +59,9 @@ class SemanticKittiConfig(Config):
 
     # Type of task performed on this dataset (also overwritten)
     dataset_task = ''
+
+    # Task set to be selected on the dataset
+    task_set = 2
 
     # Number of CPU threads for the input pipeline
     input_threads = 10
@@ -101,7 +109,7 @@ class SemanticKittiConfig(Config):
     # Radius of the input sphere
     in_radius = 6.0
     val_radius = 51.0
-    n_frames = 4
+    n_frames = 1 # 4
     max_in_points = 100000
     max_val_points = 100000
 
@@ -195,12 +203,32 @@ class SemanticKittiConfig(Config):
     # class_w = [1.430, 5.000, 5.000, 4.226, 5.000, 5.000, 5.000, 5.000, 0.719, 2.377,
     #            0.886, 3.863, 0.869, 1.209, 0.594, 3.780, 1.129, 5.000, 5.000]
 
-    # Do we nee to save convergence
+    # Do we need to save convergence
     saving = True
     saving_path = None
 
     # Only train class and center head
     pre_train = False
+    
+    # use wandb for logging
+    wandb = False
+
+# ----------------------------------------------------------------------------------------------------------------------
+#
+#           Parse args
+#       \******************/
+#
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=2)
+    parser.add_argument("-s", "--saving_path", help="Path to save predictions", default=None)
+    parser.add_argument("-p", "--prev_train_path", help="Directory to load checkpoint", default=None)
+    parser.add_argument("-i", "--chkp_idx", help="Index of checkpoint", type=int, default=2)
+    parser.add_argument("--pretrain", action="store_true", help="Pretrain network")
+    parser.add_argument("--wandb", action="store_true", help="Use wandb for logging")
+    args = parser.parse_args()
+    return args
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -223,17 +251,24 @@ if __name__ == '__main__':
     # Set GPU visible device
     os.environ['CUDA_VISIBLE_DEVICES'] = GPU_ID
 
+    args = parse_args()
+    
+    if args.wandb:
+        wandb.init(project="mscv-capstone")
+
     ###############
     # Previous chkp
     ###############
 
     # Choose here if you want to start training from a previous snapshot (None for new training)
 
-    #previous_training_path = 'Log_2020-06-05_17-18-35'
-    previous_training_path = 'Log_2020-10-06_16-51-05'#'Log_2020-08-30_01-29-20'
-    #previous_training_path =''
+    # previous_training_path = 'Log_2020-06-05_17-18-35'
+    # previous_training_path = 'Log_2020-10-06_16-51-05'#'Log_2020-08-30_01-29-20'
+    # previous_training_path = ''
     # Choose index of checkpoint to start from. If None, uses the latest chkp
-    chkp_idx = None
+    # chkp_idx = None
+    previous_training_path = args.prev_train_path
+    chkp_idx = args.chkp_idx
     if previous_training_path:
 
         # Find all snapshot in the chosen training folder
@@ -264,10 +299,9 @@ if __name__ == '__main__':
     if previous_training_path:
         config.load(os.path.join('results', previous_training_path))
         config.saving_path = None
-    config.learning_rate = 0.0
-    config.pre_train = False
+    config.pre_train = args.pretrain
     config.free_dim = 4
-    config.n_frames = 2
+    config.n_frames = 1 # 2
     config.reinit_var = True
     config.n_test_frames = 1
     config.stride = 1
@@ -275,8 +309,20 @@ if __name__ == '__main__':
     config.sampling = 'importance'
     config.decay_sampling = 'None'
     # Get path from argument if given
-    if len(sys.argv) > 1:
-        config.saving_path = sys.argv[1]
+    # if len(sys.argv) > 1:
+    #     config.saving_path = sys.argv[1]
+
+    config.task_set = args.task_set
+    config.saving_path = args.saving_path
+    config.wandb = args.wandb
+
+    if config.pre_train:
+        config.max_epoch = 200
+        config.learning_rate = 1e-2
+    else:
+        config.max_epoch = 800
+        config.learning_rate = 1e-3
+    config.lr_decays = {i: 0.1 ** (1 / 200) for i in range(1, config.max_epoch)}
 
     # Initialize datasets
     training_dataset = SemanticKittiDataset(config, set='training',

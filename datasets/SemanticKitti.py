@@ -45,6 +45,7 @@ from utils.metrics import fast_confusion
 from datasets.common import grid_subsampling, batch_neighbors
 from utils.config import bcolors
 
+import pdb
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -55,7 +56,7 @@ from utils.config import bcolors
 class SemanticKittiDataset(PointCloudDataset):
     """Class to handle SemanticKitti dataset."""
 
-    def __init__(self, config, set='training', balance_classes=True, seqential_batch = False):
+    def __init__(self, config, set='training', balance_classes=True, seqential_batch = False, return_unknowns = False):
         PointCloudDataset.__init__(self, 'SemanticKitti')
 
         ##########################
@@ -69,7 +70,7 @@ class SemanticKittiDataset(PointCloudDataset):
         self.dataset_task = 'slam_segmentation'
 
         # Training or test set
-        self.set = set
+        self.set = set 
 
         # Get a list of sequences
         if self.set == 'training':
@@ -89,15 +90,30 @@ class SemanticKittiDataset(PointCloudDataset):
             self.frames.append(frames)
 
         self.seqential_batch = seqential_batch
+        self.return_unknowns = return_unknowns
         ###########################
         # Object classes parameters
         ###########################
+        
+        # Ani: thing classes
+        self.task_set = config.task_set
+        if self.task_set == 0:
+            self.things = 3
+        elif self.task_set == 1:
+            self.things = 4
+        elif self.task_set == 2:
+            self.things = 7
+        else:
+            self.things = 9
 
         # Read labels
-        if config.n_frames == 1:
-            config_file = join(self.path, 'semantic-kitti.yaml')
+        #TODO: revert back
+        if config.task_set == -1:
+            config_file = join('data/SemanticKitti/', 'semantic-kitti-orig.yaml')
+        elif config.n_frames == 1:
+            config_file = join('data/SemanticKitti/', 'semantic-kitti.yaml')
         elif config.n_frames > 1:
-            config_file = join(self.path, 'semantic-kitti.yaml')
+            config_file = join('data/SemanticKitti/', 'semantic-kitti.yaml')
         else:
             raise ValueError('number of frames has to be >= 1')
 
@@ -110,8 +126,13 @@ class SemanticKittiDataset(PointCloudDataset):
         with open(config_file, 'r') as stream:
             doc = yaml.safe_load(stream)
             all_labels = doc['labels']
-            learning_map_inv = doc['learning_map_inv']
-            learning_map = doc['learning_map']
+            if config.task_set == -1:
+                learning_map_inv = doc['learning_map_inv']
+                learning_map = doc['learning_map']
+            else:
+                task_set_map = doc['task_set_map']
+                learning_map_inv = task_set_map[self.task_set]['learning_map_inv']
+                learning_map = task_set_map[self.task_set]['learning_map']
             self.learning_map = np.zeros((np.max([k for k in learning_map.keys()]) + 1), dtype=np.int32)
             for k, v in learning_map.items():
                 self.learning_map[k] = v
@@ -119,6 +140,20 @@ class SemanticKittiDataset(PointCloudDataset):
             self.learning_map_inv = np.zeros((np.max([k for k in learning_map_inv.keys()]) + 1), dtype=np.int32)
             for k, v in learning_map_inv.items():
                 self.learning_map_inv[k] = v
+
+            if self.task_set in (0, 1):
+                self.unknown_label = max(learning_map.values())
+
+            if self.return_unknowns:
+                self.unknown_label_to_names = {}
+                self.unknown_label_names = []
+                for k, v in learning_map.items():
+                    # store names for unknown labels
+                    if v == self.unknown_label:
+                        label_name = all_labels[k]
+                        self.unknown_label_to_names[k] = label_name
+                        self.unknown_label_names.append(label_name)
+                self.unknown_label_names = np.array(self.unknown_label_names)
 
         # Dict from labels to names
         self.label_to_names = {k: all_labels[v] for k, v in learning_map_inv.items()}
@@ -226,6 +261,7 @@ class SemanticKittiDataset(PointCloudDataset):
         p_list = []
         f_list = []
         l_list = []
+        u_list = [] # unknown labels
         ins_l_list = []
         fi_list = []
         p0_list = []
@@ -236,6 +272,7 @@ class SemanticKittiDataset(PointCloudDataset):
         f_inc_r_inds_list = []
         f_inc_r_mask_list = []
         val_labels_list = []
+        val_unk_labels_list = []
         val_ins_labels_list = []
         val_center_label_list = []
         val_time_list = []
@@ -272,6 +309,8 @@ class SemanticKittiDataset(PointCloudDataset):
             merged_labels = np.zeros((0,), dtype=np.int32)
             merged_ins_labels = np.zeros((0,), dtype=np.int32)
             merged_coords = np.zeros((0, 9), dtype=np.float32)
+            if self.return_unknowns:
+                merged_unk_labels = np.zeros((0,), dtype=np.int32)
 
             # Get center of the first frame in world coordinates
             p_origin = np.zeros((1, 4))
@@ -284,6 +323,8 @@ class SemanticKittiDataset(PointCloudDataset):
             o_ins_labels= None
             o_center_labels = None
             o_times = None
+            if self.return_unknowns:
+                o_unk_labels = None
 
             t += [time.time()]
 
@@ -303,9 +344,9 @@ class SemanticKittiDataset(PointCloudDataset):
                         f_inc += 1
                         continue
 
-                # Path of points and labels
                 seq_path = join(self.path, 'sequences', self.sequences[s_ind])
                 velo_file = join(seq_path, 'velodyne', self.frames[s_ind][f_ind - f_inc] + '.bin')
+
                 if self.set == 'test':
                     label_file = None
                 else:
@@ -317,9 +358,11 @@ class SemanticKittiDataset(PointCloudDataset):
 
                 if self.set == 'test':
                     # Fake labels
-                    sem_labels = np.zeros((frame_points.shape[0],), dtype=np.int32)
-                    center_labels = np.zeros((frame_points.shape[0],4   ), dtype=np.float32)
-                    ins_labels = np.zeros((frame_points.shape[0],), dtype=np.int32)
+                    sem_labels = np.zeros((points.shape[0],), dtype=np.int32)
+                    center_labels = np.zeros((points.shape[0], 4), dtype=np.float32)
+                    ins_labels = np.zeros((points.shape[0],), dtype=np.int32)
+                    if self.return_unknowns:
+                        unk_labels = np.zeros((points.shape[0],), dtype=np.int32)
                 else:
                     # Read labels
                     frame_labels = np.fromfile(label_file, dtype=np.int32)
@@ -331,9 +374,16 @@ class SemanticKittiDataset(PointCloudDataset):
                     if np.isnan(center_labels).any():
                         center_labels = np.zeros_like(center_labels)
 
-                    #center_labels = (center_labels > 0.3) * 1
+                    # mask instance labels for unknown class
+                    if self.task_set in (0, 1):
+                        ins_labels[sem_labels == self.unknown_label] = 0
+
+                    # center_labels = (center_labels > 0.3) * 1
                     center_labels = center_labels.astype(np.float32)
 
+                    if self.return_unknowns:
+                        unk_labels = frame_labels & 0xFFFF  # semantic label in lower half
+                
                 # Apply pose (without np.dot to avoid multi-threading)
                 hpoints = np.hstack((points[:, :3], np.ones_like(points[:, :1])))
                 #new_points = hpoints.dot(pose.T)
@@ -346,10 +396,11 @@ class SemanticKittiDataset(PointCloudDataset):
                     o_labels = sem_labels.astype(np.int32)
                     o_center_labels = center_labels
                     o_ins_labels = ins_labels.astype(np.int32)
+                    if self.return_unknowns:
+                        o_unk_labels = unk_labels.astype(np.int32)
 
                 if self.set in ['validation', 'test'] and self.config.n_test_frames > 1 and f_inc > 0:
                     f_inc_points.append(new_points[:, :3].astype(np.float32))
-
 
                 # In case radius smaller than 50m, chose new center on a point of the wanted class or not
                 if self.in_R < 50.0 and f_inc == 0:
@@ -366,9 +417,11 @@ class SemanticKittiDataset(PointCloudDataset):
                     #eliminate points which are not belong to any instance class for future frame
 
                     if self.config.sampling == 'objectness':
-                        mask = ((sem_labels > 0) & (sem_labels < 9) & mask)
+                        # mask = ((sem_labels > 0) & (sem_labels < 9) & mask)
+                        mask = ((sem_labels > 0) & (sem_labels < self.things) & mask)
                     elif self.config.sampling == 'importance':
-                        n_points_to_sample = np.sum((sem_labels > 0) & (sem_labels < 9))
+                        # n_points_to_sample = np.sum((sem_labels > 0) & (sem_labels < 9))
+                        n_points_to_sample = np.sum((sem_labels > 0) & (sem_labels < self.things))
                         probs = (center_labels[:,0] + 0.1)
                         idxs = np.random.choice(np.arange(center_labels.shape[0]), n_points_to_sample, p=probs/np.sum(probs))
                         new_mask = np.zeros_like(mask)
@@ -401,7 +454,8 @@ class SemanticKittiDataset(PointCloudDataset):
                                 continue
                         #eliminate points which are not belong to any instance class for future frame
                         if label_pred is not None:
-                            mask = (( label_pred > 0) & (label_pred < 9) & mask)
+                            # mask = (( label_pred > 0) & (label_pred < 9) & mask)
+                            mask = (( label_pred > 0) & (label_pred < self.things) & mask)
                     elif self.config.sampling == 'importance':
                         filename = '{:s}_{:07d}_c.npy'.format(self.sequences[s_ind], f_ind - f_inc)
                         file_path = join(test_path, filename)
@@ -441,6 +495,8 @@ class SemanticKittiDataset(PointCloudDataset):
                 sem_labels = sem_labels[rand_order]
                 ins_labels = ins_labels[rand_order]
                 center_labels = center_labels[rand_order]
+                if self.return_unknowns:
+                    unk_labels = unk_labels[rand_order]
                 # Place points in original frame reference to get coordinates
                 if f_inc == 0:
                     new_coords = points[rand_order, :]
@@ -466,6 +522,8 @@ class SemanticKittiDataset(PointCloudDataset):
                     merged_labels = np.hstack((merged_labels, sem_labels))
                     merged_ins_labels = np.hstack((merged_ins_labels, ins_labels))
                     merged_coords = np.vstack((merged_coords, new_coords))
+                    if self.return_unknowns:
+                        merged_unk_labels = np.hstack((merged_unk_labels, unk_labels))
 
                 num_merged += 1
                 f_inc += 1
@@ -480,6 +538,12 @@ class SemanticKittiDataset(PointCloudDataset):
             in_pts, in_fts, in_lbls, in_slbls = grid_subsampling(merged_points,
                                                        features=merged_coords,
                                                        labels=merged_labels,
+                                                       ins_labels=merged_ins_labels,
+                                                       sampleDl=self.config.first_subsampling_dl)
+            if self.return_unknowns:
+                _, _, in_unk_lbls, _ = grid_subsampling(merged_points,
+                                                       features=merged_coords,
+                                                       labels=merged_unk_labels,
                                                        ins_labels=merged_ins_labels,
                                                        sampleDl=self.config.first_subsampling_dl)
 
@@ -510,6 +574,8 @@ class SemanticKittiDataset(PointCloudDataset):
                 in_lbls = in_lbls[input_inds, :]
                 in_slbls = in_slbls[input_inds, :]
                 n = input_inds.shape[0]
+                if self.return_unknowns:
+                    in_unk_lbls = in_unk_lbls[input_inds, :]
 
             in_times = in_fts[:, 8]#hard coded last dim
             in_cts = in_fts[:, d_coords:8]
@@ -566,6 +632,8 @@ class SemanticKittiDataset(PointCloudDataset):
             p_list += [in_pts]
             f_list += [in_fts]
             l_list += [np.squeeze(in_lbls)]
+            if self.return_unknowns:
+                u_list += [np.squeeze(in_unk_lbls)]
             ins_l_list += [np.squeeze(in_slbls)]
             fi_list += [[s_ind, f_ind]]
             p0_list += [p0]
@@ -580,6 +648,8 @@ class SemanticKittiDataset(PointCloudDataset):
                 f_inc_r_inds_list = []
                 f_inc_r_mask_list = []
             val_labels_list += [o_labels]
+            if self.return_unknowns:
+                val_unk_labels_list += [o_unk_labels]
             val_ins_labels_list += [o_ins_labels]
             val_center_label_list += [o_center_labels]#original centers (all of them)
 
@@ -596,17 +666,33 @@ class SemanticKittiDataset(PointCloudDataset):
         # Concatenate batch
         ###################
         #print (c_list.shape)
-        centers = np.concatenate(c_list, axis=0) if not self.set  == 'validation' else np.concatenate(val_center_label_list, axis=0)
+        # centers = np.concatenate(c_list, axis=0) if not self.set  in ['validation', 'test'] else np.concatenate(val_center_label_list, axis=0)
+        # Ani:
+        centers = np.concatenate(c_list, axis=0)
         times = np.concatenate(t_list, axis=0)
         stacked_points = np.concatenate(p_list, axis=0)
         features = np.concatenate(f_list, axis=0)
         labels = np.concatenate(l_list, axis=0)
-        ins_labels = np.concatenate(ins_l_list, axis=0) if not self.set == 'validation' else np.concatenate(val_ins_labels_list, axis=0)
+        if self.return_unknowns:
+            unk_labels = np.concatenate(u_list, axis=0)
+        # ins_labels = np.concatenate(ins_l_list, axis=0) if not self.set in ['validation', 'test'] else np.concatenate(val_ins_labels_list, axis=0)
+        # Ani:
+        ins_labels = np.concatenate(ins_l_list, axis=0)
         frame_inds = np.array(fi_list, dtype=np.int32)
         frame_centers = np.stack(p0_list, axis=0)
         stack_lengths = np.array([pp.shape[0] for pp in p_list], dtype=np.int32)
         scales = np.array(s_list, dtype=np.float32)
         rots = np.stack(R_list, axis=0)
+        
+        # Ani:
+        if o_center_labels is not None:
+            val_center_labels = np.concatenate(val_center_label_list, axis=0)
+        else:
+            val_center_labels = np.zeros_like(centers)
+        if o_ins_labels is not None:
+            val_ins_labels = np.concatenate(val_ins_labels_list, axis=0)
+        else:
+            val_ins_labels = np.zeros_like(ins_labels)
 
         # Input features (Use reflectance, input height or all coordinates)
         stacked_features = np.ones_like(stacked_points[:, :1], dtype=np.float32)
@@ -649,7 +735,9 @@ class SemanticKittiDataset(PointCloudDataset):
         t += [time.time()]
 
         # Add scale and rotation for testing
-        input_list += [scales, rots, frame_inds, frame_centers, centers, times, ins_labels.astype(np.int64), r_inds_list, r_mask_list, f_inc_r_inds_list, f_inc_r_mask_list, val_labels_list, val_center_label_list]
+        input_list += [scales, rots, frame_inds, frame_centers, centers, times, ins_labels.astype(np.int64), r_inds_list, r_mask_list, f_inc_r_inds_list, f_inc_r_mask_list, val_labels_list, val_center_labels, val_ins_labels]
+        if self.return_unknowns:
+            input_list += [unk_labels.astype(np.int64), val_unk_labels_list]
 
         t += [time.time()]
 
@@ -738,7 +826,6 @@ class SemanticKittiDataset(PointCloudDataset):
         self.poses = []
 
         for seq in self.sequences:
-
             seq_folder = join(self.path, 'sequences', seq)
 
             # Read Calib
@@ -754,7 +841,6 @@ class SemanticKittiDataset(PointCloudDataset):
         ###################################
         # Prepare the indices of all frames
         ###################################
-
         seq_inds = np.hstack([np.ones(len(_), dtype=np.int32) * i for i, _ in enumerate(self.frames)])
         frame_inds = np.hstack([np.arange(len(_), dtype=np.int32) for _ in self.frames])
         self.all_inds = np.vstack((seq_inds, frame_inds)).T
@@ -1494,7 +1580,16 @@ class SemanticKittiCustomBatch:
         self.f_inc_reproj_masks = input_list[ind]
         ind += 1
         self.val_labels = input_list[ind]
-
+        ind += 1
+        self.val_centers = torch.from_numpy(input_list[ind])
+        ind += 1
+        self.val_ins_labels = torch.from_numpy(input_list[ind])
+        if ind == len(input_list) - 1:
+            return
+        ind += 1
+        self.unk_labels = torch.from_numpy(input_list[ind])
+        ind += 1
+        self.val_unk_labels_list = input_list[ind]
         return
 
     def pin_memory(self):

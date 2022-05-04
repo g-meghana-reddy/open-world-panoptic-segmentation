@@ -59,8 +59,7 @@ class KalmanBoxTracker(object):
         #                       [0,0,0,0,0,0,1,0,0,0,0]])
 
         # self.kf.R[0:,0:] *= 10.   # measurement uncertainty
-        self.kf.P[7:,
-        7:] *= 1000.  # state uncertainty, give high uncertainty to the unobservable initial velocities, covariance matrix
+        self.kf.P[7:, 7:] *= 1000.  # state uncertainty, give high uncertainty to the unobservable initial velocities, covariance matrix
         self.kf.P *= 10.
 
         # self.kf.Q[-1,-1] *= 0.01    # process uncertainty
