@@ -1,3 +1,4 @@
+import argparse
 from sklearn.cluster import DBSCAN
 import numpy as np
 import pickle
@@ -9,6 +10,8 @@ import sys
 from utils import *
 import open3d as o3d
 import glob
+
+import pdb
 
 
 def evaluate(inds):
@@ -99,50 +102,60 @@ def vis_instance_o3d():
     o3d.visualization.draw_geometries([pcd_objects, pcd_background])
 
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=2)
+    parser.add_argument("-d", "--dataset", help="Dataset", default='semantic-kitti')
+    parser.add_argument("-s", "--sequence", help="Sequence", type=int, default=8)
+    args = parser.parse_args()
+    return args
+
+
 if __name__ == '__main__':
-    seq = '08' # '08'
-    # seq_prefix = '08_0'
 
-    if len(sys.argv) > 1:
-        task_set = int(sys.argv[1])
-        # seq = sys.argv[1]
-        # seq_prefix = sys.argv[2]
-    else:
-        task_set = 1
- 
-    # write_dir = '/project_data/ramanan/achakrav/hu-segmentation/kitti_raw_ts1_segmented/'
-    # if not os.path.exists(write_dir):
-    #     os.makedirs(write_dir)
-
-    if task_set == 0:
+    args = parse_args()
+    if args.task_set == 0:
         unk_label = 7
-    elif task_set == 1:
+    elif args.task_set == 1:
         unk_label = 11
     else:
-        assert False
+        raise ValueError('Unknown task set: {}'.format(args.task_set))
 
-    # scan_folder = '/media/data/dataset/kitti-odometry/dataset/sequences/' + seq + '/velodyne'
-    scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/velodyne/'
-    scan_files = load_paths(scan_folder)
-    # scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti-Raw/2011_09_26/'
-    # scan_files = glob.glob(scan_folder + '*/velodyne_points/data/*.bin')
+    if args.dataset == 'semantic-kitti':
+        seq = '{:02d}'.format(args.sequence)
+        scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/velodyne/'
+        scan_files = load_paths(scan_folder)
+        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}/val_probs/'.format(args.task_set)
 
-    # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}/val_probs/'.format(task_set)
-    # TODO: remove this later
-    objsem_folder = '/project_data/ramanan/mganesin/4D-PLS/test/val_preds_TS{}/val_probs/'.format(task_set)
+    elif args.dataset == 'kitti-raw':
+        scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti-Raw/2011_09_26/'
+        scan_files = glob.glob(scan_folder + '*/velodyne_points/data/*.bin')
+        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_raw_TS{}/val_preds/'.format(args.task_set)
+        
+    elif args.dataset == 'kitti-360':
+        seq = '2013_05_28_drive_{:04d}_sync'.format(args.sequence)
+        scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/data_3d_raw/' + seq + '/velodyne_points/data/'
+        label_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/data_3d_raw_labels/' + seq + '/labels/'
+        label_files = glob.glob(label_folder + '/*')
+        file_ids = [x.split('/')[-1][:-6] for x in label_files]
+        scan_files = sorted([
+            os.path.join(scan_folder, file_id + '.bin') for file_id in file_ids
+        ])
+        
+        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}_kitti360/val_probs/'.format(args.task_set)
 
-    # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/val_preds_raw_TS{}/val_preds/'.format(task_set)
     objsem_files = load_paths(objsem_folder)
 
     sem_file_mask = []
     obj_file_mask = []
     ins_file_mask = []
+    
     for idx, file in enumerate(objsem_files):
         if '_c' in file:
             obj_file_mask.append(idx)
         elif '_i' in file:
             ins_file_mask.append(idx)
-        elif '_e' not in file and '_u' not in file and '_pots' not in file and '.ply' not in file:
+        elif '_e' not in file and '_u' not in file and '_t' not in file and '_pots' not in file and '.ply' not in file:
             sem_file_mask.append(idx)
     
     objectness_files = objsem_files[obj_file_mask]
@@ -170,8 +183,8 @@ if __name__ == '__main__':
         instance_file = instance_files[idx]
         instances = np.load(instance_file)
         parent_dir, ins_base = os.path.split(instance_file)
-        segmented_file = os.path.join(parent_dir, ins_base.replace('i', 'u'))
-
+        segmented_file = os.path.join(parent_dir, ins_base.replace('_i', '_u'))
+          
         mask = labels == unk_label
         background_mask = labels != unk_label
 
