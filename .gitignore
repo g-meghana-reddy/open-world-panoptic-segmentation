@@ -1,3 +1,9 @@
 *.pyc
 *.so
 *.o
+.ipynb_checkpoints
+outputs
+wandb
+slurm_logs
+data
+scripts
