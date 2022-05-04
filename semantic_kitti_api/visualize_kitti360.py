@@ -12,7 +12,7 @@ import pdb
 
 
 def prepare_legend(frame_size):
-    legend = Image.open('/project_data/ramanan/achakrav/4D-PLS/Legend.png')
+    legend = Image.open('/project_data/ramanan/achakrav/4D-PLS/outputs/Legend.png')
     w1, h1 = frame_size
     w2, h2 = legend.size
     legend = legend.resize((3*w2, 3*h2))
