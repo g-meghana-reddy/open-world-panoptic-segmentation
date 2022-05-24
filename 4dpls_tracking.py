@@ -25,7 +25,7 @@ def main(FLAGS):
     if task_set == 0:
         unknown_sem_label = 7
     elif task_set == 1:
-        unknown_sem_label = 11
+        unknown_sem_label = 10
     elif task_set == 2:
         unknown_sem_label = 0
 
@@ -34,7 +34,7 @@ def main(FLAGS):
         doc = yaml.safe_load(stream)
         learning_map_doc = doc['task_set_map'][task_set]['learning_map']
         inv_learning_map_doc = doc['task_set_map'][task_set]['learning_map_inv']
-    
+
     inv_learning_map = np.zeros((np.max([k for k in inv_learning_map_doc.keys()]) + 1), 
                                 dtype=np.int32)
     for k, v in inv_learning_map_doc.items():

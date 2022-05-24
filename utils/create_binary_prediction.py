@@ -39,8 +39,8 @@ if task_set == 0:
     sem = [0,3,4,5,6]
     inst = [1,2,7]
 elif task_set == 1:
-    sem = [0,4,5,6,7,8,9,10]
-    inst = [1,2,3,11]
+    sem = [0,4,5,6,7,8,9]
+    inst = [1,2,3,10]
 else:
     sem = range(7,18)
     inst = range(0,7)

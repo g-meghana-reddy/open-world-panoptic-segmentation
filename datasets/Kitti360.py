@@ -301,12 +301,13 @@ class Kitti360Dataset(PointCloudDataset):
             # Get center of the first frame in world coordinates
             p_origin = np.zeros((1, 4))
             p_origin[0, 3] = 1
-            pose0 = self.poses[s_ind][f_ind]
+            pose_origin_inv = np.linalg.inv(self.poses[s_ind][0])
+            pose0 = self.poses[s_ind][f_ind].dot(pose_origin_inv)
             p0 = p_origin.dot(pose0.T)[:, :3]
             p0 = np.squeeze(p0)
             o_pts = None
             o_labels = None
-            o_ins_labels= None
+            o_ins_labels = None
             o_center_labels = None
             o_times = None
             if self.return_unknowns:
@@ -799,12 +800,15 @@ class Kitti360Dataset(PointCloudDataset):
             Returns
             -------
             list
-                list of poses as 4x4 numpy arrays. (velo -> world)
+                list of poses (Tr[velo_t -> velo_t]) as 4x4 numpy arrays.
         """
         seq = filename.split('/')[-2]
         seq_idx = self.sequences.index(seq)
         seq_frames = set(self.frames[seq_idx])
-        calib_inv = np.linalg.inv(calibration)
+
+        TrCamToVelo = calibration
+        TrVeloToCam = np.linalg.inv(TrCamToVelo)
+        TrWorldToCamFrame0 = None # first frame pose (inverse)
 
         poses = []
         with open(filename, 'r') as f:
@@ -813,11 +817,19 @@ class Kitti360Dataset(PointCloudDataset):
                 idx = '{:010d}'.format(int(values[0]))
                 if idx not in seq_frames:
                     continue
-                pose = np.eye(4)
-                pose[0, 0:4] = values[1:5]
-                pose[1, 0:4] = values[5:9]
-                pose[2, 0:4] = values[9:13]
+                TrCamToWorld = np.eye(4)
+                TrCamToWorld[0, 0:4] = values[1:5]
+                TrCamToWorld[1, 0:4] = values[5:9]
+                TrCamToWorld[2, 0:4] = values[9:13]
 
-                poses.append(np.matmul(calib_inv, pose))
+                # transform Tr[cam_t->world] to Tr[velo_t->velo_0]
+                if len(poses):
+                    TrCamToCam = np.matmul(TrWorldToCamFrame0, TrCamToWorld)
+                    pose = np.matmul(TrCamToVelo, np.matmul(TrCamToCam, TrVeloToCam))
+                # already at frame 0
+                else:
+                    TrWorldToCamFrame0 = np.linalg.inv(TrCamToWorld)
+                    pose = np.eye(4)
+                poses.append(pose)
         return poses
         

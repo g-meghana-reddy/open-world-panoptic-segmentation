@@ -106,7 +106,7 @@ if __name__ == '__main__':
     if task_set == 0:
         unk_label = 7
     elif task_set == 1:
-        unk_label = 11
+        unk_label = 10
     else:
         assert False, 'Task set not implemented'
     

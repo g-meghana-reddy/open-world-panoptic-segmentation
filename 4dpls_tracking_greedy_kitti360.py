@@ -52,7 +52,7 @@ def main(FLAGS):
     if task_set == 0:
         unknown_sem_label = 7
     elif task_set == 1:
-        unknown_sem_label = 11
+        unknown_sem_label = 10
     elif task_set == 2:
         unknown_sem_label = 0
 
@@ -101,7 +101,7 @@ def main(FLAGS):
         point_names = []
         label_path = os.path.join(dataset, 'data_3d_raw_labels', seq_name, 'labels')
         point_path = os.path.join(dataset, 'data_3d_raw', seq_name, 'velodyne_points', 'data')
-        
+
         # populate the label names
         frame_ids = set(vf[:-6] for vf in os.listdir(label_path) if vf.endswith('.label'))
         seq_point_names = sorted([
@@ -109,15 +109,15 @@ def main(FLAGS):
             if fn.endswith(".bin") and fn[:-4] in frame_ids
         ])
         point_names.extend(seq_point_names)
-        
+
         mot_tracker = GreedyTracker()
         for idx, point_file in tqdm(enumerate(seq_point_names)):
             file_id = point_file.split('/')[-1][:-4]
-            
+
             # Load the semantic predictions
             sem_path = os.path.join(prediction_path, '{0:s}_{1:s}.npy'.format(seq_name, file_id))
             sem_labels = np.load(sem_path)
-            
+
             # Load the unknown instance predictions
             unknown_ins_path = os.path.join(prediction_path, '{0:s}_{1:s}_{2:s}.npy'.format(seq_name, file_id, inst_ext))
             unknown_ins_labels = np.load(unknown_ins_path)
@@ -125,10 +125,10 @@ def main(FLAGS):
             # Load /create the tracked unknown predictions
             unknown_track_path = os.path.join(save_dir, '{0:s}_{1:s}_t.npy'.format(seq_name, file_id))
             unknown_track_labels = unknown_ins_labels.copy()
-            
+
             # Load the points and project them to camera coordinates
             points = np.fromfile(point_file, dtype=np.float32).reshape([-1,4])
-            
+
             hpoints = np.hstack((points[:, :3], np.ones_like(points[:, :1])))
             new_points = np.sum(np.expand_dims(hpoints, 2) * poses_seq[idx].T, axis=1)
             points = new_points[:, :3]
@@ -139,7 +139,7 @@ def main(FLAGS):
             unknown_inst = unknown_ins_labels[mask]
             unknown_points = points[mask]
             point_indexes_unknown = point_indexes[mask]
-            
+
             centers, center2points = [], {}
             for ins_id in np.unique(unknown_inst):
                 ind = np.where(unknown_inst == ins_id)[0]
