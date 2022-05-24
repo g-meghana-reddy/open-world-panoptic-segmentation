@@ -59,7 +59,7 @@ First, go to the `semantic-kitti-api` repo.
 
 Then, generate per-frame visualizations using the following command:
 ```
-python visualize.py -d ../data/SemanticKitti/ -t 1 -c ../data/SemanticKitti/semantic-kitti.yaml -s 08 -p ../results/validation/TS1 -di --visu 1 -sd ../trk_valid_vis/TS1
+python visualize.py -d ../data/SemanticKitti/ -t 1 -c ../data/SemanticKitti/semantic-kitti.yaml -s 08 -p ../results/validation/TS1 -di --visu 1 -sd ../outputs/trk_valid_vis/TS1
 ```
 
 Then, go to the directory where png files are saved.
@@ -106,12 +106,12 @@ First, go to the `semantic-kitti-api` repo.
 
 Then, generate per-frame visualizations using the following command:
 ```
-python visualize_kitti360.py -d ../data/Kitti360/ -t 1 -c ../data/Kitti360/kitti-360.yaml -s 02 -p ../results/validation/Kitti360/TS1 -di --visu 1 -sd ../trk_valid_vis/Kitti360/TS1
+python visualize_kitti360.py -d ../data/Kitti360/ -t 1 -c ../data/Kitti360/kitti-360.yaml -s 02 -p ../results/validation/Kitti360/TS1 -di --visu 1 -sd ../outputs/trk_valid_vis/Kitti360/TS1
 ```
 
 Then, go to the directory where png files are saved.
 ```
-cd ../trk_valid_vis/Kitti360/TS1/1_pred_TS1/
+cd ../outputs/trk_valid_vis/Kitti360/TS1/1_pred_TS1/
 ```
 
 Finally, run the following command:

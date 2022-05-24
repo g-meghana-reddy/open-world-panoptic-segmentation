@@ -203,7 +203,7 @@ if __name__ == '__main__':
         embedding_file = embedding_files[idx]
         embeddings = np.load(embedding_file)
 
-        unk_label = 11 # for task set 1
+        unk_label = 10 # for task set 1
         mask = labels == unk_label
         bg_mask = labels != unk_label
 

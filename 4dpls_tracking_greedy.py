@@ -30,7 +30,7 @@ def main(FLAGS):
     if task_set == 0:
         unknown_sem_label = 7
     elif task_set == 1:
-        unknown_sem_label = 11
+        unknown_sem_label = 10
     elif task_set == 2:
         unknown_sem_label = 0
 
