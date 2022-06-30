@@ -27,12 +27,13 @@ def main(FLAGS):
     save_dir = FLAGS.save_dir
 
     # thing classes
-    if task_set == 0:
-        unknown_sem_label = 7
-    elif task_set == 1:
-        unknown_sem_label = 10
-    elif task_set == 2:
-        unknown_sem_label = 0
+    # if task_set == 0:
+    #     unknown_sem_label = 7
+    # elif task_set == 1:
+    #     unknown_sem_label = 10
+    # elif task_set == 2:
+    #     unknown_sem_label = 0
+    unknown_sem_labels = range(1, 7)
 
     if FLAGS.baseline:
         inst_ext = 'i'
@@ -87,9 +88,8 @@ def main(FLAGS):
             sem_labels = np.load(sem_path)
             
             # Load the unknown instance predictions
-            unknown_ins_path = os.path.join(prediction_path, '{0:02d}_{1:07d}_{}.npy'.format(sequence, idx, inst_ext))
+            unknown_ins_path = os.path.join(prediction_path, '{0:02d}_{1:07d}_{2:s}.npy'.format(sequence, idx, inst_ext))
             unknown_ins_labels = np.load(unknown_ins_path)
-            
             
             # Load /create the tracked unknown predictions
             unknown_track_path = os.path.join(save_dir, '{0:02d}_{1:07d}_t.npy'.format(sequence,idx))
@@ -109,73 +109,70 @@ def main(FLAGS):
             else:
                 points = new_points[:, :3]
             
-            
             points = torch.from_numpy(points)
             point_indexes = torch.arange(len(points))
 
-            mask = sem_labels == unknown_sem_label
-            unknown_inst = unknown_ins_labels[mask]
-            unknown_points = points[mask]
-            point_indexes_unknown = point_indexes[mask]
-            
-            
-            
-            centers, center2points = [], {}
-            for ins_id in np.unique(unknown_inst):
+            for unknown_sem_label in unknown_sem_labels:
+                mask = sem_labels == unknown_sem_label
+                unknown_inst = unknown_ins_labels[mask]
+                unknown_points = points[mask]
+                point_indexes_unknown = point_indexes[mask]
                 
-                ind = np.where(unknown_inst == ins_id)[0]
-                #Meghs
+                centers, center2points = [], {}
+                for ins_id in np.unique(unknown_inst):
+                    ind = np.where(unknown_inst == ins_id)[0]
+                    #Meghs
+                    
+                    # If we have N = 25 points or less then just drop those instances.
+                    if unknown_points[ind].shape[0] < 50:
+                        unknown_track_labels[point_indexes_unknown[ind]] = 0
+                        continue
+
+                    # For valid instances remove outliers which are two times the distance from the median.
+                    # Gives the valid points and corresponding indices
+                    # refined_unknown_points, mask_ind = remove_outliers(unknown_points[ind])
+                    # new_ind = ind[mask_ind]
+                    # outliers = np.setdiff1d(ind, new_ind)
+                    
+                    # Calculate the new median with refined points
+                    #center = get_median_center_from_points(refined_unknown_points)
+                    center = get_median_center_from_points(unknown_points[ind])
+                    
+                    # Create a dictionary of {center: corresponding points}
+                    center = np.stack(center)
+                    centers.append(center)
+                    center2points[center.data.tobytes()] = point_indexes_unknown[ind]
+                    
+                    # Assign 0 to all outliers
+                    # unknown_track_labels[outliers] = 0
                 
-                # If we have N = 25 points or less then just drop those instances.
-                if unknown_points[ind].shape[0] < 50:
-                    unknown_track_labels[point_indexes_unknown[ind]] = 0
+                # If there are no unknown points then assign the ids as it is
+                if len(centers) == 0:
+                    # unknown_ins_labels = unknown_ins_labels.astype(np.int32)
+                    # new_preds = np.left_shift(unknown_ins_labels, 16)
+
+                    # sem_labels = sem_labels.astype(np.int32)
+                    # inv_sem_labels = inv_learning_map[sem_labels]
+                    # new_preds = np.bitwise_or(new_preds, inv_sem_labels)
+
+                    # new_preds.tofile('{}/sequences/{:02d}/predictions/{:06d}.label'.format(
+                    #     save_dir, sequence, idx))
                     continue
-
-                # For valid instances remove outliers which are two times the distance from the median.
-                # Gives the valid points and corresponding indices
-#                 refined_unknown_points, mask_ind = remove_outliers(unknown_points[ind])
-#                 new_ind = ind[mask_ind]
-#                 outliers = np.setdiff1d(ind, new_ind)
+                centers = np.stack(centers)
                 
-                # Calculate the new median with refined points
-                #center = get_median_center_from_points(refined_unknown_points)
-                center = get_median_center_from_points(unknown_points[ind])
+                # Update the tracker with the new centers
+                start_time = time.time()
+                trackers = mot_tracker.update(centers)
+                cycle_time = time.time() - start_time
+                total_time += cycle_time
                 
-                # Create a dictionary of {center: corresponding points}
-                center = np.stack(center)
-                centers.append(center)
-                center2points[center.data.tobytes()] = point_indexes_unknown[ind]
-                
-                # Assign 0 to all outliers
-                # unknown_track_labels[outliers] = 0
-            
-            # If there are no unknown points then assign the ids as it is
-            if len(centers) == 0:
-                unknown_ins_labels = unknown_ins_labels.astype(np.int32)
-                new_preds = np.left_shift(unknown_ins_labels, 16)
+                # Get the tracklets and update the instance id for the corresponding points
+                for (t_id, trk_idx) in enumerate(trackers):
+                    if trackers[trk_idx][0] == math.inf:
+                        continue
+                    inds = center2points[trackers[trk_idx].data.tobytes()]
+                    unknown_track_labels[inds] = trk_idx #t_id+1
 
-                sem_labels = sem_labels.astype(np.int32)
-                inv_sem_labels = inv_learning_map[sem_labels]
-                new_preds = np.bitwise_or(new_preds, inv_sem_labels)
-
-                new_preds.tofile('{}/sequences/{:02d}/predictions/{:06d}.label'.format(
-                    save_dir, sequence, idx))
-                continue
-            centers = np.stack(centers)
-            
-            # Update the tracker with the new centers
-            start_time = time.time()
-            trackers = mot_tracker.update(centers)
-            cycle_time = time.time() - start_time
-            total_time += cycle_time
-            
-            # Get the tracklets and update the instance id for the corresponding points
-            for (t_id, trk_idx) in enumerate(trackers):
-                if trackers[trk_idx][0] == math.inf:
-                    continue
-                inds = center2points[trackers[trk_idx].data.tobytes()]
-                unknown_track_labels[inds] = trk_idx #t_id+1
-        
             unknown_track_labels = unknown_track_labels.astype(np.int32)
             new_preds = np.left_shift(unknown_track_labels, 16)
 
