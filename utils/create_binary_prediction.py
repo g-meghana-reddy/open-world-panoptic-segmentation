@@ -8,10 +8,12 @@ MAX_PROCESSOR = 8
 executor = concurrent.futures.ThreadPoolExecutor(max_workers=MAX_PROCESSOR)
 jobs = []
 
-task_set = 0
-config_file = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti.yaml'
-log_dir = '/project_data/ramanan/mganesin/4D-PLS/results_baseline/validation/TS{}'.format(task_set)
-prediction_path = '/project_data/ramanan/mganesin/4D-PLS/test_baseline/val_preds_TS{}/val_probs'.format(task_set)
+task_set = -1
+config_file = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti-orig.yaml'
+# log_dir = '/project_data/ramanan/mganesin/4D-PLS/results_baseline/validation/TS{}'.format(task_set)
+log_dir = "/project_data/ramanan/achakrav/4D-PLS/results/validation/pretrained/"
+# prediction_path = '/project_data/ramanan/mganesin/4D-PLS/test_baseline/val_preds_TS{}/val_probs'.format(task_set)
+prediction_path = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_4dpls_pretrained/val_probs'.format(task_set)
 save_path = log_dir
 data_dir = '../data/SemanticKitti/'
 
@@ -41,14 +43,17 @@ if task_set == 0:
 elif task_set == 1:
     sem = [0,4,5,6,7,8,9]
     inst = [1,2,3,10]
-else:
+elif task_set == 2:
     sem = range(7,18)
     inst = range(0,7)
+elif task_set == -1:
+    sem = range(8,19)
+    inst = range(0,8)
 
 def write_pred(prediction_path, save_path, sequence, scene, inv_learning_map):
 
-    sem_preds = np.load('{}/{:02d}_{:07d}.npy'.format(prediction_path, sequence, scene))
-    ins_preds = np.load('{}/{:02d}_{:07d}_{}.npy'.format(prediction_path, sequence, scene, ins_ext))
+    sem_preds = np.load('{}/{:02d}_{:06d}.npy'.format(prediction_path, sequence, scene))
+    ins_preds = np.load('{}/{:02d}_{:06d}_{}.npy'.format(prediction_path, sequence, scene, ins_ext))
 
     ins_preds = ins_preds.astype(np.int32)
     for idx, semins in enumerate(np.unique(sem_preds)):
@@ -75,8 +80,12 @@ def write_pred(prediction_path, save_path, sequence, scene, inv_learning_map):
 
 with open(config_file, 'r') as stream:
     doc = yaml.safe_load(stream)
-    learning_map_doc = doc['task_set_map'][task_set]['learning_map']
-    inv_learning_map_doc = doc['task_set_map'][task_set]['learning_map_inv']
+    if task_set == -1:
+        learning_map_doc = doc['learning_map']
+        inv_learning_map_doc = doc['learning_map_inv']
+    else:
+        learning_map_doc = doc['task_set_map'][task_set]['learning_map']
+        inv_learning_map_doc = doc['task_set_map'][task_set]['learning_map_inv']
 
 inv_learning_map = np.zeros((np.max([k for k in inv_learning_map_doc.keys()]) + 1), dtype=np.int32)
 for k, v in inv_learning_map_doc.items():
@@ -95,11 +104,11 @@ for sequence in sequences:
     n_scenes = len(glob.glob('{}/sequences/{:02d}/velodyne/*.bin'.format(data_dir, sequence)))
     print ('Processing scene {}'.format(sequence))
     for scene in range(0, n_scenes):
-        if not os.path.exists('{}/{:02d}_{:07d}.npy'.format(prediction_path, sequence, scene)):
+        if not os.path.exists('{}/{:02d}_{:06d}.npy'.format(prediction_path, sequence, scene)):
             print('Scene : {} is missing'.format(scene))
-            print ('{}/{:02d}_{:07d}.npy'.format(prediction_path, sequence, scene))
+            print ('{}/{:02d}_{:06d}.npy'.format(prediction_path, sequence, scene))
             continue
-        #write_pred(prediction_path, save_path, sequence, scene, inv_learning_map)
+        # write_pred(prediction_path, save_path, sequence, scene, inv_learning_map)
         jobs.append(executor.submit(write_pred, prediction_path, save_path, sequence, scene, inv_learning_map))
 
     completed = 0

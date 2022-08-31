@@ -33,7 +33,7 @@ def main(FLAGS):
     #     unknown_sem_label = 10
     # elif task_set == 2:
     #     unknown_sem_label = 0
-    unknown_sem_labels = range(1, 7)
+    unknown_sem_labels = range(1, 9)
 
     if FLAGS.baseline:
         inst_ext = 'i'
@@ -43,8 +43,12 @@ def main(FLAGS):
     # get number of interest classes, and the label mappings class
     with open(FLAGS.data_cfg, 'r') as stream:
         doc = yaml.safe_load(stream)
-        learning_map_doc = doc['task_set_map'][task_set]['learning_map']
-        inv_learning_map_doc = doc['task_set_map'][task_set]['learning_map_inv']
+        if task_set == -1:
+            learning_map_doc = doc['learning_map']
+            inv_learning_map_doc = doc['learning_map_inv']
+        else:
+            learning_map_doc = doc['task_set_map'][task_set]['learning_map']
+            inv_learning_map_doc = doc['task_set_map'][task_set]['learning_map_inv']
     
     inv_learning_map = np.zeros((np.max([k for k in inv_learning_map_doc.keys()]) + 1), 
                                 dtype=np.int32)
@@ -84,15 +88,15 @@ def main(FLAGS):
         for idx, point_file in tqdm(enumerate(seq_point_names)):
             
             # Load the semantic predictions
-            sem_path = os.path.join(prediction_path, '{0:02d}_{1:07d}.npy'.format(sequence,idx))
+            sem_path = os.path.join(prediction_path, '{0:02d}_{1:06d}.npy'.format(sequence,idx))
             sem_labels = np.load(sem_path)
             
             # Load the unknown instance predictions
-            unknown_ins_path = os.path.join(prediction_path, '{0:02d}_{1:07d}_{2:s}.npy'.format(sequence, idx, inst_ext))
+            unknown_ins_path = os.path.join(prediction_path, '{0:02d}_{1:06d}_{2:s}.npy'.format(sequence, idx, inst_ext))
             unknown_ins_labels = np.load(unknown_ins_path)
             
             # Load /create the tracked unknown predictions
-            unknown_track_path = os.path.join(save_dir, '{0:02d}_{1:07d}_t.npy'.format(sequence,idx))
+            unknown_track_path = os.path.join(save_dir, '{0:02d}_{1:06d}_t.npy'.format(sequence,idx))
             unknown_track_labels = unknown_ins_labels.copy()
             
             # Load the points and project them to camera coordinates

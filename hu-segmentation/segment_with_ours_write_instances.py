@@ -120,13 +120,15 @@ if __name__ == '__main__':
     #     unk_label = 10
     # else:
     #     raise ValueError('Unknown task set: {}'.format(args.task_set))
-    unk_labels = range(1, 7)
+    # unk_labels = range(1, 7)
+    unk_labels = range(1, 9)
 
     if args.dataset == 'semantic-kitti':
         seq = '{:02d}'.format(args.sequence)
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/velodyne/'
         scan_files = load_paths(scan_folder)
-        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}_huseg_known/val_probs/'.format(args.task_set)
+        # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}_huseg_known/val_probs/'.format(args.task_set)
+        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_4dpls_pretrained/val_probs/'
 
     elif args.dataset == 'kitti-raw':
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti-Raw/2011_09_26/'
