@@ -115,9 +115,15 @@ if __name__ == '__main__':
 
   # get number of interest classes, and the label mappings
   # class
-  class_remap = DATA["task_set_map"][FLAGS.task_set]["learning_map"]
-  class_inv_remap = DATA["task_set_map"][FLAGS.task_set]["learning_map_inv"]
-  class_ignore = DATA["task_set_map"][FLAGS.task_set]["learning_ignore"]
+  if FLAGS.task_set == -1:
+    class_remap = DATA["learning_map"]
+    class_inv_remap = DATA["learning_map_inv"]
+    class_ignore = DATA["learning_ignore"]
+  else:
+    class_remap = DATA["task_set_map"][FLAGS.task_set]["learning_map"]
+    class_inv_remap = DATA["task_set_map"][FLAGS.task_set]["learning_map_inv"]
+    class_ignore = DATA["task_set_map"][FLAGS.task_set]["learning_ignore"]
+    
   nr_classes = len(class_inv_remap)
   class_strings = DATA["labels"]
 
@@ -254,6 +260,12 @@ if __name__ == '__main__':
         'road', 'sidewalk', 'parking', 'other-ground', 'building', 'vegetation', 'trunk', 'terrain', 'fence', 'pole',
         'traffic-sign'
     ]
+  else:
+    things = ['car', 'truck', 'bicycle', 'motorcycle', 'other-vehicle', 'person', 'bicyclist', 'motorcyclist']
+    stuff = [
+        'road', 'sidewalk', 'parking', 'other-ground', 'building', 'vegetation', 'trunk', 'terrain', 'fence', 'pole',
+        'traffic-sign'
+    ]
   all_classes = things + stuff
 
   # class
@@ -293,7 +305,7 @@ if __name__ == '__main__':
   mIoU = output_dict["all"]["IoU"]
   known_IoU = np.mean([float(output_dict[c]["IoU"]) for c in all_classes if c != 'unknown'])
   # Ani
-  if FLAGS.task_set != 2:
+  if FLAGS.task_set == 0 or FLAGS.task_set == 1:
     PQ_unknown = output_dict["unknown"]["PQ"]
     unknown_IoU = output_dict["unknown"]["IoU"]
 
@@ -312,7 +324,7 @@ if __name__ == '__main__':
   codalab_output["sq_things"] = float(SQ_things)
   codalab_output["known_IoU"] = float(known_IoU)
   # Ani
-  if FLAGS.task_set != 2:
+  if FLAGS.task_set == 0 or FLAGS.task_set == 1:
     codalab_output["pq_unknown_mean"] = float(PQ_unknown)
     codalab_output["unknown_IoU"] = float(unknown_IoU)
 
