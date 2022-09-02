@@ -387,7 +387,9 @@ class Panoptic4DEval:
     # ==========
 
     #print ('num tubes:', len(list(cl_preds.items())))
-    AQ_overall = np.sum(self.pan_aq_ovr)/ np.sum(num_tubes[1:9])
+    # AQ_overall = np.sum(self.pan_aq_ovr)/ np.sum(num_tubes[1:9])
+    # Thing classes are 1:4 for TS1
+    AQ_overall = np.sum(self.pan_aq_ovr)/ np.sum(num_tubes[1:4])
     AQ = self.pan_aq / np.maximum(num_tubes, self.eps)
 
     iou_mean, iou, iou_p, iou_r = self.getSemIoU()

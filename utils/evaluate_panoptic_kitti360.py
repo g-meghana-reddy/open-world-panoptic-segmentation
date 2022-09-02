@@ -9,7 +9,7 @@ import numpy as np
 import time
 import json
 
-from eval_np import PanopticEval
+from eval_np import PanopticEval, Panoptic4DEval
 
 # possible splits
 splits = ["train", "valid", "test"]
@@ -135,11 +135,15 @@ if __name__ == '__main__':
   print("Ignoring classes: ", ignore_class)
 
   # create evaluator
-  class_evaluator = PanopticEval(nr_classes, None, ignore_class, min_points=FLAGS.min_inst_points)
+  # class_evaluator = PanopticEval(nr_classes, None, ignore_class, min_points=FLAGS.min_inst_points)
+  class_evaluator = Panoptic4DEval(nr_classes, None, ignore_class, offset = 2 ** 32, min_points=FLAGS.min_inst_points)
 
   # get test set
   # test_sequences = DATA["split"][FLAGS.split]
   test_sequences = ['02']
+
+  # create evaluator
+  class_evaluator = Panoptic4DEval(nr_classes, None, ignore_class, offset = 2 ** 32, min_points=FLAGS.min_inst_points)
 
   # get label paths
   label_names = []
@@ -173,6 +177,8 @@ if __name__ == '__main__':
   percent = 10
   for label_file, pred_file in zip(label_names, pred_names):
     count = count + 1
+    if count == 3:
+      break
     if 100 * count / complete > percent:
       print("{}% ".format(percent), end="", flush=True)
       percent = percent + 10
@@ -197,177 +203,195 @@ if __name__ == '__main__':
       u_pred_sem_cat = u_pred_sem_cat[:FLAGS.limit]
       u_pred_inst = u_pred_inst[:FLAGS.limit]
 
-    class_evaluator.addBatch(u_pred_sem_class, u_pred_inst, u_label_sem_class, u_label_inst)
+    # class_evaluator.addBatch(u_pred_sem_class, u_pred_inst, u_label_sem_class, u_label_inst)
+    class_evaluator.addBatch(label_file.split('/')[-3], u_pred_sem_class, u_pred_inst, u_label_sem_class, u_label_inst)
 
   print("100%")
 
   complete_time = time.time() - start_time
+  LSTQ, LAQ_ovr, LAQ, AQ_p, AQ_r,  iou, iou_mean, iou_p, iou_r = class_evaluator.getPQ4D()
+  # things_iou = iou[1:9].mean()
+  # stuff_iou = iou[9:].mean()
+  # Thing classes are 1:4 for TS1
+  things_iou = iou[1:4].mean()
+  stuff_iou = iou[4:].mean()
+  print ("=== Results ===")
+  print ("LSTQ:", LSTQ)
+  print("S_assoc (LAQ):", LAQ_ovr)
+  float_formatter = "{:.2f}".format
+  np.set_printoptions(formatter={'float_kind': float_formatter})
+  print ("Assoc:", LAQ)
+  print ("iou:", iou)
+  print("things_iou:", things_iou)
+  print("stuff_iou:", stuff_iou)
+
+  print ("S_cls (LSQ):", iou_mean)
 
   # when I am done, print the evaluation
-  class_PQ, class_SQ, class_RQ, class_all_PQ, class_all_SQ, class_all_RQ = class_evaluator.getPQ()
-  class_IoU, class_all_IoU = class_evaluator.getSemIoU()
+#   class_PQ, class_SQ, class_RQ, class_all_PQ, class_all_SQ, class_all_RQ = class_evaluator.getPQ()
+#   class_IoU, class_all_IoU = class_evaluator.getSemIoU()
 
-  # Ani:
-  class_all_Prec = class_evaluator.pan_tp.astype(np.double) / np.maximum(
-      class_evaluator.pan_tp.astype(np.double) + 
-      class_evaluator.pan_fp.astype(np.double), class_evaluator.eps)
-  class_all_Recall = class_evaluator.pan_tp.astype(np.double) / np.maximum(
-      class_evaluator.pan_tp.astype(np.double) + 
-      class_evaluator.pan_fn.astype(np.double), class_evaluator.eps)
+#   # Ani:
+#   class_all_Prec = class_evaluator.pan_tp.astype(np.double) / np.maximum(
+#       class_evaluator.pan_tp.astype(np.double) + 
+#       class_evaluator.pan_fp.astype(np.double), class_evaluator.eps)
+#   class_all_Recall = class_evaluator.pan_tp.astype(np.double) / np.maximum(
+#       class_evaluator.pan_tp.astype(np.double) + 
+#       class_evaluator.pan_fn.astype(np.double), class_evaluator.eps)
 
-  # now make a nice dictionary
-  output_dict = {}
+#   # now make a nice dictionary
+#   output_dict = {}
 
-  # make python variables
-  class_PQ = class_PQ.item()
-  class_SQ = class_SQ.item()
-  class_RQ = class_RQ.item()
-  class_all_PQ = class_all_PQ.flatten().tolist()
-  class_all_SQ = class_all_SQ.flatten().tolist()
-  class_all_RQ = class_all_RQ.flatten().tolist()
-  class_IoU = class_IoU.item()
-  # Ani
-  class_all_IoU = class_all_IoU.flatten().tolist()
-  class_all_Prec = class_all_Prec.flatten().tolist()
-  class_all_Recall = class_all_Recall.flatten().tolist()
+#   # make python variables
+#   class_PQ = class_PQ.item()
+#   class_SQ = class_SQ.item()
+#   class_RQ = class_RQ.item()
+#   class_all_PQ = class_all_PQ.flatten().tolist()
+#   class_all_SQ = class_all_SQ.flatten().tolist()
+#   class_all_RQ = class_all_RQ.flatten().tolist()
+#   class_IoU = class_IoU.item()
+#   # Ani
+#   class_all_IoU = class_all_IoU.flatten().tolist()
+#   class_all_Prec = class_all_Prec.flatten().tolist()
+#   class_all_Recall = class_all_Recall.flatten().tolist()
 
-  # fill in with the raw values
-  # output_dict["raw"] = {}
-  # output_dict["raw"]["class_PQ"] = class_PQ
-  # output_dict["raw"]["class_SQ"] = class_SQ
-  # output_dict["raw"]["class_RQ"] = class_RQ
-  # output_dict["raw"]["class_all_PQ"] = class_all_PQ
-  # output_dict["raw"]["class_all_SQ"] = class_all_SQ
-  # output_dict["raw"]["class_all_RQ"] = class_all_RQ
-  # output_dict["raw"]["class_IoU"] = class_IoU
-  # output_dict["raw"]["class_all_IoU"] = class_all_IoU
+#   # fill in with the raw values
+#   # output_dict["raw"] = {}
+#   # output_dict["raw"]["class_PQ"] = class_PQ
+#   # output_dict["raw"]["class_SQ"] = class_SQ
+#   # output_dict["raw"]["class_RQ"] = class_RQ
+#   # output_dict["raw"]["class_all_PQ"] = class_all_PQ
+#   # output_dict["raw"]["class_all_SQ"] = class_all_SQ
+#   # output_dict["raw"]["class_all_RQ"] = class_all_RQ
+#   # output_dict["raw"]["class_IoU"] = class_IoU
+#   # output_dict["raw"]["class_all_IoU"] = class_all_IoU
 
-  if FLAGS.task_set == 0:
-    things = ['car', 'person', 'catch-all']
-    stuff = ['road', 'building', 'vegetation', 'fence']
-  if FLAGS.task_set == 1:
-    things = ['car', 'person', 'truck', 'catch-all']
-    stuff = ['road', 'building', 'vegetation', 'fence', 'sidewalk', 'terrain', 'pole']
-  elif FLAGS.task_set == 2:
-    # things = ['car', 'truck', 'bicycle', 'motorcycle', 'other-vehicle', 'person', 'bicyclist', 'motorcyclist']
-    things = ['car', 'truck', 'bicycle', 'motorcycle', 'other-vehicle', 'person']
-    stuff = [
-        'road', 'sidewalk', 'parking', 'other-ground', 'building', 'vegetation', 'trunk', 'terrain', 'fence', 'pole',
-        'traffic-sign'
-    ]
-  all_classes = things + stuff
+#   if FLAGS.task_set == 0:
+#     things = ['car', 'person', 'catch-all']
+#     stuff = ['road', 'building', 'vegetation', 'fence']
+#   if FLAGS.task_set == 1:
+#     things = ['car', 'person', 'truck', 'catch-all']
+#     stuff = ['road', 'building', 'vegetation', 'fence', 'sidewalk', 'terrain', 'pole']
+#   elif FLAGS.task_set == 2:
+#     # things = ['car', 'truck', 'bicycle', 'motorcycle', 'other-vehicle', 'person', 'bicyclist', 'motorcyclist']
+#     things = ['car', 'truck', 'bicycle', 'motorcycle', 'other-vehicle', 'person']
+#     stuff = [
+#         'road', 'sidewalk', 'parking', 'other-ground', 'building', 'vegetation', 'trunk', 'terrain', 'fence', 'pole',
+#         'traffic-sign'
+#     ]
+#   all_classes = things + stuff
 
-  # class
+#   # class
 
-  output_dict["all"] = {}
-  output_dict["all"]["PQ"] = class_PQ
-  output_dict["all"]["SQ"] = class_SQ
-  output_dict["all"]["RQ"] = class_RQ
-  output_dict["all"]["IoU"] = class_IoU
+#   output_dict["all"] = {}
+#   output_dict["all"]["PQ"] = class_PQ
+#   output_dict["all"]["SQ"] = class_SQ
+#   output_dict["all"]["RQ"] = class_RQ
+#   output_dict["all"]["IoU"] = class_IoU
 
-  classwise_tables = {}
+#   classwise_tables = {}
 
-  for idx, (pq, rq, sq, iou) in enumerate(zip(class_all_PQ, class_all_RQ, class_all_SQ, class_all_IoU)):
-    class_str = class_strings[class_inv_remap[idx]]
-    output_dict[class_str] = {}
-    output_dict[class_str]["PQ"] = pq
-    output_dict[class_str]["SQ"] = sq
-    output_dict[class_str]["RQ"] = rq
-    output_dict[class_str]["IoU"] = iou
-    # Ani
-    output_dict[class_str]["Prec"] = class_all_Prec[idx]
-    output_dict[class_str]["Recall"] = class_all_Recall[idx]
+#   for idx, (pq, rq, sq, iou) in enumerate(zip(class_all_PQ, class_all_RQ, class_all_SQ, class_all_IoU)):
+#     class_str = class_strings[class_inv_remap[idx]]
+#     output_dict[class_str] = {}
+#     output_dict[class_str]["PQ"] = pq
+#     output_dict[class_str]["SQ"] = sq
+#     output_dict[class_str]["RQ"] = rq
+#     output_dict[class_str]["IoU"] = iou
+#     # Ani
+#     output_dict[class_str]["Prec"] = class_all_Prec[idx]
+#     output_dict[class_str]["Recall"] = class_all_Recall[idx]
   
-  PQ_all = np.mean([float(output_dict[c]["PQ"]) for c in all_classes])
-  PQ_known = np.mean([float(output_dict[c]["PQ"]) for c in all_classes if c != 'unknown'])
-  PQ_dagger = np.mean([float(output_dict[c]["PQ"]) for c in things] + [float(output_dict[c]["IoU"]) for c in stuff])
-  RQ_all = np.mean([float(output_dict[c]["RQ"]) for c in all_classes])
-  SQ_all = np.mean([float(output_dict[c]["SQ"]) for c in all_classes])
+#   PQ_all = np.mean([float(output_dict[c]["PQ"]) for c in all_classes])
+#   PQ_known = np.mean([float(output_dict[c]["PQ"]) for c in all_classes if c != 'unknown'])
+#   PQ_dagger = np.mean([float(output_dict[c]["PQ"]) for c in things] + [float(output_dict[c]["IoU"]) for c in stuff])
+#   RQ_all = np.mean([float(output_dict[c]["RQ"]) for c in all_classes])
+#   SQ_all = np.mean([float(output_dict[c]["SQ"]) for c in all_classes])
 
-  PQ_things = np.mean([float(output_dict[c]["PQ"]) for c in things])
-  RQ_things = np.mean([float(output_dict[c]["RQ"]) for c in things])
-  SQ_things = np.mean([float(output_dict[c]["SQ"]) for c in things])
+#   PQ_things = np.mean([float(output_dict[c]["PQ"]) for c in things])
+#   RQ_things = np.mean([float(output_dict[c]["RQ"]) for c in things])
+#   SQ_things = np.mean([float(output_dict[c]["SQ"]) for c in things])
 
-  PQ_stuff = np.mean([float(output_dict[c]["PQ"]) for c in stuff])
-  RQ_stuff = np.mean([float(output_dict[c]["RQ"]) for c in stuff])
-  SQ_stuff = np.mean([float(output_dict[c]["SQ"]) for c in stuff])
-  mIoU = output_dict["all"]["IoU"]
-  known_IoU = np.mean([float(output_dict[c]["IoU"]) for c in all_classes if c != 'unknown'])
-  # Ani
-  if FLAGS.task_set != 2:
-    PQ_unknown = output_dict["catch-all"]["PQ"]
-    unknown_IoU = output_dict["catch-all"]["IoU"]
+#   PQ_stuff = np.mean([float(output_dict[c]["PQ"]) for c in stuff])
+#   RQ_stuff = np.mean([float(output_dict[c]["RQ"]) for c in stuff])
+#   SQ_stuff = np.mean([float(output_dict[c]["SQ"]) for c in stuff])
+#   mIoU = output_dict["all"]["IoU"]
+#   known_IoU = np.mean([float(output_dict[c]["IoU"]) for c in all_classes if c != 'unknown'])
+#   # Ani
+#   if FLAGS.task_set != 2:
+#     PQ_unknown = output_dict["catch-all"]["PQ"]
+#     unknown_IoU = output_dict["catch-all"]["IoU"]
 
-  codalab_output = {}
-  codalab_output["pq_mean"] = float(PQ_all)
-  codalab_output["pq_known_mean"] = float(PQ_known)
-  codalab_output["pq_dagger"] = float(PQ_dagger)
-  codalab_output["sq_mean"] = float(SQ_all)
-  codalab_output["rq_mean"] = float(RQ_all)
-  codalab_output["iou_mean"] = float(mIoU)
-  codalab_output["pq_stuff"] = float(PQ_stuff)
-  codalab_output["rq_stuff"] = float(RQ_stuff)
-  codalab_output["sq_stuff"] = float(SQ_stuff)
-  codalab_output["pq_things"] = float(PQ_things)
-  codalab_output["rq_things"] = float(RQ_things)
-  codalab_output["sq_things"] = float(SQ_things)
-  codalab_output["known_IoU"] = float(known_IoU)
-  # Ani
-  if FLAGS.task_set != 2:
-    codalab_output["pq_catch_all_mean"] = float(PQ_unknown)
-    codalab_output["catch_all_IoU"] = float(unknown_IoU)
+#   codalab_output = {}
+#   codalab_output["pq_mean"] = float(PQ_all)
+#   codalab_output["pq_known_mean"] = float(PQ_known)
+#   codalab_output["pq_dagger"] = float(PQ_dagger)
+#   codalab_output["sq_mean"] = float(SQ_all)
+#   codalab_output["rq_mean"] = float(RQ_all)
+#   codalab_output["iou_mean"] = float(mIoU)
+#   codalab_output["pq_stuff"] = float(PQ_stuff)
+#   codalab_output["rq_stuff"] = float(RQ_stuff)
+#   codalab_output["sq_stuff"] = float(SQ_stuff)
+#   codalab_output["pq_things"] = float(PQ_things)
+#   codalab_output["rq_things"] = float(RQ_things)
+#   codalab_output["sq_things"] = float(SQ_things)
+#   codalab_output["known_IoU"] = float(known_IoU)
+#   # Ani
+#   if FLAGS.task_set != 2:
+#     codalab_output["pq_catch_all_mean"] = float(PQ_unknown)
+#     codalab_output["catch_all_IoU"] = float(unknown_IoU)
 
-  print("Completed in {} s".format(complete_time))
+#   print("Completed in {} s".format(complete_time))
 
-  if FLAGS.output is not None:
-    table = []
-    for cl in all_classes:
-      entry = output_dict[cl]
-      # Ani
-      table.append({
-          "class": cl,
-          "pq": "{:.3}".format(entry["PQ"]),
-          "sq": "{:.3}".format(entry["SQ"]),
-          "rq": "{:.3}".format(entry["RQ"]),
-          "iou": "{:.3}".format(entry["IoU"]),
-          "prec": "{:.3}".format(entry["Prec"]),
-          "recall": "{:.3}".format(entry["Recall"]),
-      })
+#   if FLAGS.output is not None:
+#     table = []
+#     for cl in all_classes:
+#       entry = output_dict[cl]
+#       # Ani
+#       table.append({
+#           "class": cl,
+#           "pq": "{:.3}".format(entry["PQ"]),
+#           "sq": "{:.3}".format(entry["SQ"]),
+#           "rq": "{:.3}".format(entry["RQ"]),
+#           "iou": "{:.3}".format(entry["IoU"]),
+#           "prec": "{:.3}".format(entry["Prec"]),
+#           "recall": "{:.3}".format(entry["Recall"]),
+#       })
 
-    print("Generating output files.")
-    # save to yaml
-    output_filename = os.path.join(FLAGS.output, 'scores.txt')
-    with open(output_filename, 'w') as outfile:
-      yaml.dump(codalab_output, outfile, default_flow_style=False)
+#     print("Generating output files.")
+#     # save to yaml
+#     output_filename = os.path.join(FLAGS.output, 'scores.txt')
+#     with open(output_filename, 'w') as outfile:
+#       yaml.dump(codalab_output, outfile, default_flow_style=False)
 
-    ## producing a detailed result page.
-    output_filename = os.path.join(FLAGS.output, "detailed_results.html")
-    with open(output_filename, "w") as html_file:
-      html_file.write("""
-<!doctype html>
-<html lang="en" style="scroll-behavior: smooth;">
-<head>
-  <script src='https://cdnjs.cloudflare.com/ajax/libs/tabulator/4.4.3/js/tabulator.min.js'></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabulator/4.4.3/css/bulma/tabulator_bulma.min.css">
-</head>
-<body>
-  <div id="classwise_results"></div>
+#     ## producing a detailed result page.
+#     output_filename = os.path.join(FLAGS.output, "detailed_results.html")
+#     with open(output_filename, "w") as html_file:
+#       html_file.write("""
+# <!doctype html>
+# <html lang="en" style="scroll-behavior: smooth;">
+# <head>
+#   <script src='https://cdnjs.cloudflare.com/ajax/libs/tabulator/4.4.3/js/tabulator.min.js'></script>
+#   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabulator/4.4.3/css/bulma/tabulator_bulma.min.css">
+# </head>
+# <body>
+#   <div id="classwise_results"></div>
 
-<script>
-  let table_data = """ + json.dumps(table) + """
+# <script>
+#   let table_data = """ + json.dumps(table) + """
 
 
-  table = new Tabulator("#classwise_results", {
-    layout: "fitData",
-    data: table_data,
-    columns: [{title: "Class", field:"class", width:200}, 
-              {title: "PQ", field:"pq", width:100, align: "center"},
-              {title: "SQ", field:"sq", width:100, align: "center"},
-              {title: "RQ", field:"rq", width:100, align: "center"},
-              {title: "IoU", field:"iou", width:100, align: "center"},
-              {title: "Prec", field:"prec", width:100, align: "center"},
-              {title: "Recall", field:"recall", width:100, align: "center"}]
-  });
-</script>
-</body>
-</html>""")
+#   table = new Tabulator("#classwise_results", {
+#     layout: "fitData",
+#     data: table_data,
+#     columns: [{title: "Class", field:"class", width:200}, 
+#               {title: "PQ", field:"pq", width:100, align: "center"},
+#               {title: "SQ", field:"sq", width:100, align: "center"},
+#               {title: "RQ", field:"rq", width:100, align: "center"},
+#               {title: "IoU", field:"iou", width:100, align: "center"},
+#               {title: "Prec", field:"prec", width:100, align: "center"},
+#               {title: "Recall", field:"recall", width:100, align: "center"}]
+#   });
+# </script>
+# </body>
+# </html>""")
