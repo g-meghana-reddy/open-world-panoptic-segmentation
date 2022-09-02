@@ -142,9 +142,6 @@ if __name__ == '__main__':
   # test_sequences = DATA["split"][FLAGS.split]
   test_sequences = ['02']
 
-  # create evaluator
-  class_evaluator = Panoptic4DEval(nr_classes, None, ignore_class, offset = 2 ** 32, min_points=FLAGS.min_inst_points)
-
   # get label paths
   label_names = []
   for sequence in test_sequences:
@@ -187,6 +184,7 @@ if __name__ == '__main__':
 
     u_label_sem_class = class_lut[label & 0xFFFF]  # remap to xentropy format
     u_label_inst = label >> 16
+    import pdb; pdb.set_trace()
     if FLAGS.limit is not None:
       u_label_sem_class = u_label_sem_class[:FLAGS.limit]
       u_label_sem_cat = u_label_sem_cat[:FLAGS.limit]
@@ -202,6 +200,7 @@ if __name__ == '__main__':
       u_pred_inst = u_pred_inst[:FLAGS.limit]
 
     # class_evaluator.addBatch(u_pred_sem_class, u_pred_inst, u_label_sem_class, u_label_inst)
+    import pdb; pdb.set_trace()
     class_evaluator.addBatch(label_file.split('/')[-3], u_pred_sem_class, u_pred_inst, u_label_sem_class, u_label_inst)
 
   print("100%")
