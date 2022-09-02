@@ -177,8 +177,6 @@ if __name__ == '__main__':
   percent = 10
   for label_file, pred_file in zip(label_names, pred_names):
     count = count + 1
-    if count == 3:
-      break
     if 100 * count / complete > percent:
       print("{}% ".format(percent), end="", flush=True)
       percent = percent + 10
@@ -214,7 +212,8 @@ if __name__ == '__main__':
   # stuff_iou = iou[9:].mean()
   # Thing classes are 1:4 for TS1
   things_iou = iou[1:4].mean()
-  stuff_iou = iou[4:].mean()
+  stuff_iou = iou[4:-1].mean()
+  unknown_iou = iou[-1]
   print ("=== Results ===")
   print ("LSTQ:", LSTQ)
   print("S_assoc (LAQ):", LAQ_ovr)
@@ -224,6 +223,7 @@ if __name__ == '__main__':
   print ("iou:", iou)
   print("things_iou:", things_iou)
   print("stuff_iou:", stuff_iou)
+  print("unknown_iou:", unknown_iou)
 
   print ("S_cls (LSQ):", iou_mean)
 
