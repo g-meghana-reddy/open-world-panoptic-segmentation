@@ -1,0 +1,15 @@
+python test_models.py -t 1 -c /project_data/ramanan/achakrav/4D-PLS/results/4DPLS_TS1 -s 4DPLS_TS1_nframes_1_slamseg
+
+a. test/4DPLS_TS1_nframes_1_slamseg   autobot-0-17
+b. test/4DPLS_TS1_nframes_1_4dpanoptic autobot-0-9
+
+TODO:
+
+1. run create_binary + evaluate_panoptic for a and b.
+2. Take pretrained weights, run test_models.py with 4d_panoptic and 4 frames + stitch tracklets + evaluate_panoptic
+3. 
+
+python test_models.py
+
+test/original_repo_finetune_1e3_importance_None_str1_bigpug_1 autobot-0-11
+test/original_repo_finetune_importance_None_str1_bigpug_1 autobot-0-21

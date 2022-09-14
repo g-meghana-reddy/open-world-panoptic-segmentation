@@ -116,12 +116,17 @@ def associate_instances_overlapping_frames(previous_ins_label, current_ins_label
     return association_costs_matched,  associations
 
 def main(FLAGS):
-    data_cfg = 'data/SemanticKitti/semantic-kitti.yaml'
-    DATA = yaml.safe_load(open(data_cfg, 'r'))
+    
     split = 'valid'
     dataset = 'data/SemanticKitti'
     task_set = FLAGS.task_set
     save_dir = FLAGS.save_dir
+
+    if task_set == -1:
+        data_cfg = 'data/SemanticKitti/semantic-kitti-orig.yaml'
+    else:
+        data_cfg = 'data/SemanticKitti/semantic-kitti.yaml'
+    DATA = yaml.safe_load(open(data_cfg, 'r'))
     
     # thing classes
     if task_set == 0:
@@ -154,8 +159,12 @@ def main(FLAGS):
 
     with open(data_cfg, 'r') as stream:
         doc = yaml.safe_load(stream)
-        learning_map_doc = doc['task_set_map'][task_set]['learning_map']
-        inv_learning_map_doc = doc['task_set_map'][task_set]['learning_map_inv']
+        if task_set == -1:
+            learning_map_doc = doc['learning_map']
+            inv_learning_map_doc = doc['learning_map_inv']
+        else:
+            learning_map_doc = doc['task_set_map'][task_set]['learning_map']
+            inv_learning_map_doc = doc['task_set_map'][task_set]['learning_map_inv']
 
     inv_learning_map = np.zeros((np.max([k for k in inv_learning_map_doc.keys()]) + 1), dtype=np.int32)
     for k, v in inv_learning_map_doc.items():
@@ -163,9 +172,14 @@ def main(FLAGS):
 
     # get number of interest classes, and the label mappings
     # class
-    class_remap = DATA['task_set_map'][task_set]["learning_map"]
-    class_inv_remap = DATA['task_set_map'][task_set]["learning_map_inv"]
-    class_ignore = DATA['task_set_map'][task_set]["learning_ignore"]
+    if task_set == -1:
+        class_remap = DATA["learning_map"]
+        class_inv_remap = DATA["learning_map_inv"]
+        class_ignore = DATA["learning_ignore"]
+    else:
+        class_remap = DATA['task_set_map'][task_set]["learning_map"]
+        class_inv_remap = DATA['task_set_map'][task_set]["learning_map_inv"]
+        class_ignore = DATA['task_set_map'][task_set]["learning_ignore"]
     nr_classes = len(class_inv_remap)
     class_strings = DATA["labels"]
 
@@ -221,9 +235,9 @@ def main(FLAGS):
             pose = poses_seq[idx]
 
             #load current frame
-            sem_path = os.path.join(prediction_path, '{0:02d}_{1:07d}.npy'.format(sequence,idx))
-            ins_path = os.path.join(prediction_path, '{0:02d}_{1:07d}_i.npy'.format(sequence,idx))
-            fet_path = os.path.join(prediction_path, '{0:02d}_{1:07d}_f.npy'.format(sequence, idx))
+            sem_path = os.path.join(prediction_path, '{0:02d}_{1:06d}.npy'.format(sequence,idx))
+            ins_path = os.path.join(prediction_path, '{0:02d}_{1:06d}_i.npy'.format(sequence,idx))
+            fet_path = os.path.join(prediction_path, '{0:02d}_{1:06d}_f.npy'.format(sequence, idx))
 
             label_sem_class = np.load(sem_path)
             label_inst = np.load(ins_path)
@@ -267,7 +281,7 @@ def main(FLAGS):
                 (values, counts) = np.unique(label_sem_class[ids], return_counts=True)
                 inst_class = values[np.argmax(counts)]
 
-                new_ids = remove_outliers(points[ids])
+                _, new_ids = remove_outliers(points[ids])
                 new_ids = ids[0][new_ids]
 
                 bbox, kalman_bbox = get_bbox_from_points(points[ids])
@@ -352,7 +366,7 @@ def main(FLAGS):
                             continue
 
                         mean = features[int(ins_id)]
-                        new_ids = remove_outliers(points[ids])
+                        _, new_ids = remove_outliers(points[ids])
                         new_ids = ids[0][new_ids]
 
                         (values, counts) = np.unique(prev_sem[ids], return_counts=True)

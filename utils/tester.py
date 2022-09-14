@@ -745,7 +745,6 @@ class ModelTester:
                         f.write(str)
 
             test_epoch += 1
-            break
 
             # Break when reaching number of desired votes
             if last_min > num_votes:

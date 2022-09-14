@@ -150,11 +150,11 @@ if __name__ == '__main__':
     obj_file_mask = []
     ins_file_mask = []
     for idx, file in enumerate(objsem_files):
-        if '_c' in file:
+        if '_c.' in file:
             obj_file_mask.append(idx)
-        elif '_i' in file:
+        elif '_i.' in file:
             ins_file_mask.append(idx)
-        elif '_e' not in file and '_u' not in file and '_t' not in file and '_pots' not in file and '.ply' not in file:
+        elif '_e.' not in file and '_u.' not in file and '_t.' not in file and '_pots.' not in file and '.ply' not in file:
             sem_file_mask.append(idx)
     
     objectness_files = objsem_files[obj_file_mask]

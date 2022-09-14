@@ -87,7 +87,7 @@ def main(FLAGS):
             sem_labels = np.load(sem_path)
             
             # Load the unknown instance predictions
-            unknown_ins_path = os.path.join(prediction_path, '{0:02d}_{1:07d}_{}.npy'.format(sequence, idx, inst_ext))
+            unknown_ins_path = os.path.join(prediction_path, '{0:02d}_{1:07d}_{2:s}.npy'.format(sequence, idx, inst_ext))
             unknown_ins_labels = np.load(unknown_ins_path)
             
             

@@ -138,6 +138,8 @@ if __name__ == '__main__':
     if torch.cuda.device_count() > 1:
         GPU_ID = '0, 1'
 
+    # Set GPU visible device
+    os.environ['CUDA_VISIBLE_DEVICES'] = GPU_ID
     ###############
     # Previous chkp
     ###############
@@ -165,21 +167,19 @@ if __name__ == '__main__':
     # Change parameters for the test here. For example, you can stop augmenting the input data.
 
     config.global_fet = False
-    config.validation_size = 4071 # 200
+    config.validation_size = 200
     config.input_threads = 16
-    config.n_frames = 1 # 4
-    config.n_test_frames = 1 # 4 #it should be smaller than config.n_frames
+    config.n_frames = 1
+    config.n_test_frames = 1 #it should be smaller than config.n_frames
     if config.n_frames < config.n_test_frames:
         config.n_frames = config.n_test_frames
     config.big_gpu = True
-    config.dataset_task = 'slam_segmentation' # '4d_panoptic'
+    config.dataset_task = '4d_panoptic'
     #config.sampling = 'density'
     config.sampling = 'importance'
     config.decay_sampling = 'None'
     config.stride = 1
-    config.first_subsampling_dl = 0.061
-    config.task_set = args.task_set
-    config.saving_path = args.saving_path
+    config.first_subsampling_dl = 0.06
 
     config.task_set = args.task_set
     config.saving_path = args.saving_path
@@ -244,7 +244,7 @@ if __name__ == '__main__':
     print('\nStart test')
     print('**********\n')
     
-    # config.dataset_task = '4d_panoptic'
+    config.dataset_task = '4d_panoptic'
     
     # Training
     if config.dataset_task == 'classification':

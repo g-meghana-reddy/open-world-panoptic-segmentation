@@ -71,10 +71,7 @@ class SemanticKittiConfig(Config):
                     'resnetb_strided',
                     'resnetb',
                     'resnetb',
-                    'resnetb',
-                    'resnetb',
                     'resnetb_strided',
-                    'resnetb',
                     'resnetb',
                     'nearest_upsample',
                     'unary',
@@ -100,14 +97,14 @@ class SemanticKittiConfig(Config):
     max_val_points = 100000
 
     # Number of batch
-    batch_num = 4
+    batch_num = 8
     val_batch_num = 1
 
     # Number of kernel points
     num_kernel_points = 15
 
     # Size of the first subsampling grid in meter
-    first_subsampling_dl = 0.06 * 2
+    first_subsampling_dl = 0.06
 
     # Radius of convolution in "number grid cell". (2.5 is the standard value)
     conv_radius = 2.5
@@ -126,7 +123,7 @@ class SemanticKittiConfig(Config):
 
     # Choice of input features
     first_features_dim = 256
-    in_features_dim = 3
+    in_features_dim = 2
     free_dim = 3
 
     # Can the network learn modulations
@@ -161,7 +158,7 @@ class SemanticKittiConfig(Config):
     epoch_steps = 500
 
     # Number of validation examples per epoch
-    validation_size = 4071 #200
+    validation_size = 200
 
     # Number of epoch between each checkpoint
     checkpoint_gap = 50
@@ -280,11 +277,10 @@ if __name__ == '__main__':
     #config.sampling = 'objectness'
     config.sampling = 'importance'
     config.decay_sampling = 'None'
+    config.big_gpu = True
 
     config.task_set = args.task_set
     config.saving_path = args.saving_path
-    # Modified to calculate validation score for all validation set
-    config.validation_size = 4071
 
     # Initialize datasetss
     test_dataset = SemanticKittiDataset(config, set='validation',

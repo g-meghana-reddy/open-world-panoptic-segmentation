@@ -77,10 +77,7 @@ class Kitti360Config(Config):
                     'resnetb_strided',
                     'resnetb',
                     'resnetb',
-                    'resnetb',
-                    'resnetb',
                     'resnetb_strided',
-                    'resnetb',
                     'resnetb',
                     'nearest_upsample',
                     'unary',
@@ -106,14 +103,14 @@ class Kitti360Config(Config):
     max_val_points = 100000
 
     # Number of batch
-    batch_num = 4
+    batch_num = 8
     val_batch_num = 1
 
     # Number of kernel points
     num_kernel_points = 15
 
     # Size of the first subsampling grid in meter
-    first_subsampling_dl = 0.06 * 2
+    first_subsampling_dl = 0.06
 
     # Radius of convolution in "number grid cell". (2.5 is the standard value)
     conv_radius = 2.5
@@ -132,7 +129,7 @@ class Kitti360Config(Config):
 
     # Choice of input features
     first_features_dim = 256
-    in_features_dim = 3
+    in_features_dim = 2
     free_dim = 3
 
     # Can the network learn modulations
