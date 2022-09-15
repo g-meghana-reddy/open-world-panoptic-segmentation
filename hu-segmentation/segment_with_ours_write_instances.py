@@ -121,14 +121,14 @@ if __name__ == '__main__':
     # else:
     #     raise ValueError('Unknown task set: {}'.format(args.task_set))
     # unk_labels = range(1, 7)
-    unk_labels = range(1, 9)
+    unk_labels = [1, 2, 3, 10]
 
     if args.dataset == 'semantic-kitti':
         seq = '{:02d}'.format(args.sequence)
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/velodyne/'
         scan_files = load_paths(scan_folder)
-        # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}_huseg_known/val_probs/'.format(args.task_set)
-        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_4dpls_pretrained/val_probs/'
+        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}_original_params_1_frames_1e-3_importance_None_str1_bigpug_1_huseg_known/val_probs/'.format(args.task_set)
+        # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_4dpls_pretrained/val_probs/'
 
     elif args.dataset == 'kitti-raw':
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti-Raw/2011_09_26/'
@@ -145,7 +145,8 @@ if __name__ == '__main__':
             os.path.join(scan_folder, file_id + '.bin') for file_id in file_ids
         ])
         
-        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}_kitti360/val_probs/'.format(args.task_set)
+        # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}_kitti360/val_probs/'.format(args.task_set)
+        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS1_kitti360_1_frames_1e-3_huseg_known'#.format(args.task_set)
 
     objsem_files = load_paths(objsem_folder)
 
@@ -153,11 +154,11 @@ if __name__ == '__main__':
     obj_file_mask = []
     ins_file_mask = []
     for idx, file in enumerate(objsem_files):
-        if '_c' in file:
+        if '_c.' in file:
             obj_file_mask.append(idx)
-        elif '_i' in file:
+        elif '_i.' in file:
             ins_file_mask.append(idx)
-        elif '_e' not in file and '_u' not in file and '_t' not in file and '_pots' not in file and '.ply' not in file:
+        elif '_e.' not in file and '_u.' not in file and '_t.' not in file and '_pots.' not in file and '.ply' not in file:
             sem_file_mask.append(idx)
     
     objectness_files = objsem_files[obj_file_mask]

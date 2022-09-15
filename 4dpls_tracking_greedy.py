@@ -88,15 +88,15 @@ def main(FLAGS):
         for idx, point_file in tqdm(enumerate(seq_point_names)):
             
             # Load the semantic predictions
-            sem_path = os.path.join(prediction_path, '{0:02d}_{1:06d}.npy'.format(sequence,idx))
+            sem_path = os.path.join(prediction_path, '{0:02d}_{1:07d}.npy'.format(sequence,idx))
             sem_labels = np.load(sem_path)
             
             # Load the unknown instance predictions
-            unknown_ins_path = os.path.join(prediction_path, '{0:02d}_{1:06d}_{2:s}.npy'.format(sequence, idx, inst_ext))
+            unknown_ins_path = os.path.join(prediction_path, '{0:02d}_{1:07d}_{2:s}.npy'.format(sequence, idx, inst_ext))
             unknown_ins_labels = np.load(unknown_ins_path)
             
             # Load /create the tracked unknown predictions
-            unknown_track_path = os.path.join(save_dir, '{0:02d}_{1:06d}_t.npy'.format(sequence,idx))
+            unknown_track_path = os.path.join(save_dir, '{0:02d}_{1:07d}_t.npy'.format(sequence,idx))
             unknown_track_labels = unknown_ins_labels.copy()
             
             # Load the points and project them to camera coordinates
@@ -159,7 +159,7 @@ def main(FLAGS):
                     # inv_sem_labels = inv_learning_map[sem_labels]
                     # new_preds = np.bitwise_or(new_preds, inv_sem_labels)
 
-                    # new_preds.tofile('{}/sequences/{:02d}/predictions/{:06d}.label'.format(
+                    # new_preds.tofile('{}/sequences/{:02d}/predictions/{:07d}.label'.format(
                     #     save_dir, sequence, idx))
                     continue
                 centers = np.stack(centers)
@@ -184,7 +184,7 @@ def main(FLAGS):
             inv_sem_labels = inv_learning_map[sem_labels]
             new_preds = np.bitwise_or(new_preds, inv_sem_labels)
 
-            new_preds.tofile('{}/sequences/{:02d}/predictions/{:06d}.label'.format(
+            new_preds.tofile('{}/sequences/{:02d}/predictions/{:07d}.label'.format(
                 save_dir, sequence, idx))
         
         
