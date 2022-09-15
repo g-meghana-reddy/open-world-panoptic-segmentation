@@ -21,7 +21,6 @@ Usage:
 ```
 python segment_with_ours_write_instances.py -d semantic-kitti -t 1 -s 8
 ```
-Set `task_set` on L114.
 
 ## Step 3: Tracking
 In order to assign temporally consistent instance IDs, run the following command:

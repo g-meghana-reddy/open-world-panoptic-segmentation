@@ -243,7 +243,7 @@ if __name__ == '__main__':
     if previous_training_path:
 
         # Find all snapshot in the chosen training folder
-        chkp_path = os.path.join('results', previous_training_path, 'checkpoints')
+        chkp_path = os.path.join('results', 'checkpoints', previous_training_path, 'checkpoints')
         chkps = [f for f in os.listdir(chkp_path) if f[:4] == 'chkp']
 
         # Find which snapshot to restore
@@ -251,7 +251,7 @@ if __name__ == '__main__':
             chosen_chkp = 'current_chkp.tar'
         else:
             chosen_chkp = np.sort(chkps)[chkp_idx]
-        chosen_chkp = os.path.join('results', previous_training_path, 'checkpoints', chosen_chkp)
+        chosen_chkp = os.path.join('results', 'checkpoints', previous_training_path, 'checkpoints', chosen_chkp)
 
     else:
         chosen_chkp = None
@@ -268,7 +268,7 @@ if __name__ == '__main__':
     # Initialize configuration class
     config = SemanticKittiConfig()
     if previous_training_path:
-        config.load(os.path.join('results', previous_training_path))
+        config.load(os.path.join('results', 'checkpoints', previous_training_path))
     config.free_dim = 4
     config.n_frames = 1 # 2
     config.reinit_var = True
