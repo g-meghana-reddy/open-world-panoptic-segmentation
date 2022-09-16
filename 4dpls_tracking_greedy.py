@@ -72,6 +72,11 @@ def main(FLAGS):
             [os.path.join(point_paths, fn) for fn in os.listdir(point_paths) if fn.endswith(".bin")])
 
         point_names.extend(seq_point_names)
+
+        # output directory to write label files
+        seq_save_dir = '{}/sequences/{:02d}/predictions/'.format(save_dir, sequence)
+        if not os.path.exists(seq_save_dir):
+            os.makedirs(seq_save_dir)
         
         idxs = np.array(len(point_names))
         
@@ -158,8 +163,8 @@ def main(FLAGS):
                 inv_sem_labels = inv_learning_map[sem_labels]
                 new_preds = np.bitwise_or(new_preds, inv_sem_labels)
 
-                new_preds.tofile('{}/sequences/{:02d}/predictions/{:06d}.label'.format(
-                    save_dir, sequence, idx))
+
+                new_preds.tofile('{0:s}/{1:06d}.label'.format(seq_save_dir, idx))
                 continue
             centers = np.stack(centers)
             
@@ -183,8 +188,7 @@ def main(FLAGS):
             inv_sem_labels = inv_learning_map[sem_labels]
             new_preds = np.bitwise_or(new_preds, inv_sem_labels)
 
-            new_preds.tofile('{}/sequences/{:02d}/predictions/{:06d}.label'.format(
-                save_dir, sequence, idx))
+            new_preds.tofile('{0:s}/{1:06d}.label'.format(seq_save_dir, idx))
         
         
 

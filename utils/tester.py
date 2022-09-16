@@ -110,7 +110,7 @@ class ModelTester:
 
         # Test saving path
         if config.saving:
-            test_path = join('test', config.saving_path.split('/')[-1])
+            test_path = join('results', 'validation', config.saving_path.split('/')[-1])
             if not exists(test_path):
                 makedirs(test_path)
             if not exists(join(test_path, 'predictions')):

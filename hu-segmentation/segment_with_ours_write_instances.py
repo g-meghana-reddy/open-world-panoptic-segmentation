@@ -107,6 +107,7 @@ def parse_args():
     parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=2)
     parser.add_argument("-d", "--dataset", help="Dataset", default='semantic-kitti')
     parser.add_argument("-s", "--sequence", help="Sequence", type=int, default=8)
+    parser.add_argument("-o", "--objsem_folder", help="Folder with object and semantic predictions", type=str, required=True)
     args = parser.parse_args()
     return args
 
@@ -125,12 +126,12 @@ if __name__ == '__main__':
         seq = '{:02d}'.format(args.sequence)
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/velodyne/'
         scan_files = load_paths(scan_folder)
-        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}/val_probs/'.format(args.task_set)
+        # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}/val_probs/'.format(args.task_set)
 
     elif args.dataset == 'kitti-raw':
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti-Raw/2011_09_26/'
         scan_files = glob.glob(scan_folder + '*/velodyne_points/data/*.bin')
-        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_raw_TS{}/val_preds/'.format(args.task_set)
+        # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_raw_TS{}/val_preds/'.format(args.task_set)
         
     elif args.dataset == 'kitti-360':
         seq = '2013_05_28_drive_{:04d}_sync'.format(args.sequence)
@@ -142,8 +143,9 @@ if __name__ == '__main__':
             os.path.join(scan_folder, file_id + '.bin') for file_id in file_ids
         ])
         
-        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}_kitti360/val_probs/'.format(args.task_set)
+        # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}_kitti360/val_probs/'.format(args.task_set)
 
+    objsem_folder = args.objsem_folder
     objsem_files = load_paths(objsem_folder)
 
     sem_file_mask = []
