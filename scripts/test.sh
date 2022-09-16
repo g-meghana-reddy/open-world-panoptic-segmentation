@@ -15,12 +15,24 @@ do
     esac
 done
 
+# Support empty experiment name
+if [ -z "${exp_name}" ]
+  then
+    VAL_OUTPUT_RELATIVE="val_preds_TS${task_set}"
+    VAL_OUTPUT="results/validation/TS${task_set}"
+    TRK_OUTPUT="results/predictions/TS${task_set}"
+    EVAL_OUTPUT="results/metrics/TS${task_set}"
+else
+    VAL_OUTPUT_RELATIVE="val_preds_TS${task_set}_${exp_name}"
+    VAL_OUTPUT="results/validation/TS${task_set}_${exp_name}"
+    TRK_OUTPUT="results/predictions/TS${task_set}_${exp_name}"
+    EVAL_OUTPUT="results/metrics/TS${task_set}_${exp_name}"
+fi
+
 # source activate 4dpls
 
 # Validation
 echo "Running Validation"
-VAL_OUTPUT_RELATIVE="val_preds_TS${task_set}_${exp_name}"
-VAL_OUTPUT="results/validation/TS${task_set}_${exp_name}"
 CUDA_VISIBLE_DEVICES=${gpu_id} python validate_semanticKitti.py -t ${task_set} -p "${prev_train_path}" -s "$VAL_OUTPUT_RELATIVE"
 echo "Validation Complete!"
 
@@ -33,13 +45,11 @@ echo "LOSP complete!"
 
 # Tracking
 echo "Running tracking"
-TRK_OUTPUT="results/predictions/TS${task_set}_${exp_name}"
 CUDA_VISIBLE_DEVICES=${gpu_id} python 4dpls_tracking_greedy.py -t ${task_set} -p "${VAL_OUTPUT}" -sd "${TRK_OUTPUT}" -dc data/SemanticKitti/semantic-kitti.yaml
 echo "Tracking complete!"
 
 # Evaluation
 echo "Running evaluation"
-EVAL_OUTPUT="results/metrics/TS${task_set}_${exp_name}"
 mkdir -p "${EVAL_OUTPUT}"
 cd utils/
 CUDA_VISIBLE_DEVICES=${gpu_id} python evaluate_panoptic.py -d ../data/SemanticKitti -p "../${TRK_OUTPUT}" -dc ../data/SemanticKitti/semantic-kitti.yaml -t ${task_set} -o "../${EVAL_OUTPUT}"
