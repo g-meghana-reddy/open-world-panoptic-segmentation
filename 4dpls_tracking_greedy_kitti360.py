@@ -98,6 +98,11 @@ def main(FLAGS):
     for poses_seq, sequence in zip(poses, test_sequences):
         seq_name = '2013_05_28_drive_{:04d}_sync'.format(sequence)
 
+        # output directory to write label files
+        seq_save_dir = '{0:s}/{1:s}/predictions/'.format(save_dir, seq_name)
+        if not os.path.exists(seq_save_dir):
+            os.makedirs(seq_save_dir)
+
         point_names = []
         label_path = os.path.join(dataset, 'data_3d_raw_labels', seq_name, 'labels')
         point_path = os.path.join(dataset, 'data_3d_raw', seq_name, 'velodyne_points', 'data')
@@ -177,8 +182,7 @@ def main(FLAGS):
                 inv_sem_labels = inv_learning_map[sem_labels]
                 new_preds = np.bitwise_or(new_preds, inv_sem_labels)
 
-                new_preds.tofile('{0:s}/{1:s}/predictions/{2:s}.label'.format(
-                    save_dir, seq_name, file_id))
+                new_preds.tofile('{0:s}/{1:s}.label'.format(seq_save_dir, file_id))
                 continue
             centers = np.stack(centers)
             
@@ -202,8 +206,7 @@ def main(FLAGS):
             inv_sem_labels = inv_learning_map[sem_labels]
             new_preds = np.bitwise_or(new_preds, inv_sem_labels)
             
-            new_preds.tofile('{0:s}/{1:s}/predictions/{2:s}.label'.format(
-                    save_dir, seq_name, file_id))
+            new_preds.tofile('{0:s}/{1:s}.label'.format(seq_save_dir, file_id))
 
 
 if __name__ == '__main__':
