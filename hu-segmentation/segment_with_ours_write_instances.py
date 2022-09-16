@@ -126,12 +126,10 @@ if __name__ == '__main__':
         seq = '{:02d}'.format(args.sequence)
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/velodyne/'
         scan_files = load_paths(scan_folder)
-        # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}/val_probs/'.format(args.task_set)
 
     elif args.dataset == 'kitti-raw':
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti-Raw/2011_09_26/'
         scan_files = glob.glob(scan_folder + '*/velodyne_points/data/*.bin')
-        # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_raw_TS{}/val_preds/'.format(args.task_set)
         
     elif args.dataset == 'kitti-360':
         seq = '2013_05_28_drive_{:04d}_sync'.format(args.sequence)
@@ -143,8 +141,6 @@ if __name__ == '__main__':
             os.path.join(scan_folder, file_id + '.bin') for file_id in file_ids
         ])
         
-        # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}_kitti360/val_probs/'.format(args.task_set)
-
     objsem_folder = args.objsem_folder
     objsem_files = load_paths(objsem_folder)
 
