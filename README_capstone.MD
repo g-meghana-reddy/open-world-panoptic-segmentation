@@ -8,44 +8,12 @@ Usage:
 python scripts/train_TS1.sh
 ```
 
-### Inference
+### Evaluation
 Usage:
 ```
-python validate_semanticKitti.py -t 1 -p 4DPLS_TS1/ -s val_preds_TS1
+sh scripts/test.sh -t 1 -p 4DPLS_TS1 -e "EXPERIMENT_NAME"
 ```
-**Note:** Do not add `/` in the saving path flag. Concretely, use `-s val_preds_TS1` and not `-s val_preds_TS1/`.
-
-## Step 2: Instance mining 
-Need to run following commands in `hu-segmentation` repo. 
-Usage:
-```
-python segment_with_ours_write_instances.py -d semantic-kitti -t 1 -s 8
-```
-Set `task_set` on L114.
-
-## Step 3: Tracking
-In order to assign temporally consistent instance IDs, run the following command:
-```
-python 4dpls_tracking_greedy.py -t 1 -p test/val_preds_TS1 -sd results/validation/TS1/ -dc data/SemanticKitti/semantic-kitti.yaml
-```
-
-This generates `.label` files.
-
-## Step 4: Evaluation on SemanticKITTI
-
-### Metrics
-
-If tracking has not been performed, generate `.label` files from semantic and instance predictions using the following command:
-```
-cd utils/
-python create_binary_prediction.py
-```
-Change `task_set` on L14 and `segmented_unknown` on L23. Note that this command should be run for Task set 2 and when tracking is not performed.
-
-Then, generate panoptic segmentation metrics using the following command:
-```
-python evaluate_panoptic.py -d ../data/SemanticKitti -p ../results/validation/TS1 -dc ../data/SemanticKitti/semantic-kitti.yaml -t 1 -o ../PQ_TS1
-```
+One can also optionally specify GPU ID using the `-g` flag.
 
 ### Extended Confusion Matrix
 To generate confusion and extended confusion matrix, run the following command:
@@ -59,12 +27,12 @@ First, go to the `semantic-kitti-api` repo.
 
 Then, generate per-frame visualizations using the following command:
 ```
-python visualize.py -d ../data/SemanticKitti/ -t 1 -c ../data/SemanticKitti/semantic-kitti.yaml -s 08 -p ../results/validation/TS1 -di --visu 1 -sd ../outputs/trk_valid_vis/TS1
+python visualize.py -d ../data/SemanticKitti/ -t 1 -c ../data/SemanticKitti/semantic-kitti.yaml -s 08 -p ../results/predictions/TS1 -di --visu 1 -sd ../results/visualizations/trk_valid_vis/TS1
 ```
 
 Then, go to the directory where png files are saved.
 ```
-cd ../trk_valid_vis/TS1/1_pred_TS1
+cd ../results/visualizations/trk_valid_vis/TS1/1_pred_TS1
 ```
 
 Finally, run the following command:
@@ -76,29 +44,12 @@ NOTE: For ffmpeg commands, refer to [this link](https://hamelot.io/visualization
 
 ## Step 5: Evaluation on KITTI-360
 
-### Inference
-To run inference on sequence number 2, run the following command:
-```
-python validate_kitti360.py -t 1 -p 4DPLS_TS1 -sd val_preds_TS1_kitti360 -s 2
-```
-
-### Instance Mining
-Then, run hu-segmentation with the following command:
-```
-python segment_with_ours_write_instances.py -s 2 -t 1 -d kitti-360
-```
-
-### Tracking
-To perform tracking on KITTI-360 using the following command:
-```
-python 4dpls_tracking_greedy_kitti360.py -t 1 -p test/val_preds_TS1_kitti360 -sd results/validation/Kitti360/TS1 -dc data/Kitti360/kitti-360.yaml
-```
-
 ### Metric evaluation
 Run evaluation on a given task set using the following command:
 ```
-python evaluate_panoptic_kitti360.py -d ../data/Kitti360/ -p ../results/validation/Kitti360/TS1 -dc ../data/Kitti360/kitti-360.yaml -t 1 -o ../PQ_TS1_kitti360
+sh scripts/test_kitti360.sh -t 1 -p 4DPLS_TS1 -e "EXPERIMENT_NAME"
 ```
+
 If you wish to evaluate on multiple sequences (currently fixed to sequence 2), change L142 to the appropriate sequence.
 
 ### Visualization
@@ -106,12 +57,12 @@ First, go to the `semantic-kitti-api` repo.
 
 Then, generate per-frame visualizations using the following command:
 ```
-python visualize_kitti360.py -d ../data/Kitti360/ -t 1 -c ../data/Kitti360/kitti-360.yaml -s 02 -p ../results/validation/Kitti360/TS1 -di --visu 1 -sd ../outputs/trk_valid_vis/Kitti360/TS1
+python visualize_kitti360.py -d ../data/Kitti360/ -t 1 -c ../data/Kitti360/kitti-360.yaml -s 02 -p ../results/predictions/Kitti360/TS1 -di --visu 1 -sd ../results/visualizations/trk_valid_vis/Kitti360/TS1
 ```
 
 Then, go to the directory where png files are saved.
 ```
-cd ../outputs/trk_valid_vis/Kitti360/TS1/1_pred_TS1/
+cd ../results/visualizations/trk_valid_vis/Kitti360/TS1/1_pred_TS1/
 ```
 
 Finally, run the following command:

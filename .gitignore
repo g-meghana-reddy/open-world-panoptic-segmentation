@@ -4,11 +4,8 @@
 **.DS_Store
 **.vscode/
 results/
-slurm_logs/
 data/
-test/
 wandb/
-outputs/
 **.ipynb_checkpoints
 **__pycache__
-scripts
+scripts/
