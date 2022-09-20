@@ -247,7 +247,7 @@ if __name__ == '__main__':
     stuff = ['road', 'building', 'vegetation', 'fence']
   if FLAGS.task_set == 1:
     things = ['car', 'person', 'truck', 'catch-all']
-    stuff = ['road', 'building', 'vegetation', 'fence', 'sidewalk', 'terrain', 'pole']
+    stuff = ['road', 'building', 'vegetation', 'fence', 'sidewalk', 'terrain']
   elif FLAGS.task_set == 2:
     # things = ['car', 'truck', 'bicycle', 'motorcycle', 'other-vehicle', 'person', 'bicyclist', 'motorcyclist']
     things = ['car', 'truck', 'bicycle', 'motorcycle', 'other-vehicle', 'person']

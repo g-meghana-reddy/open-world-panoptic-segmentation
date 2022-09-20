@@ -127,7 +127,7 @@ if __name__ == '__main__':
         seq = '{:02d}'.format(args.sequence)
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/velodyne/'
         scan_files = load_paths(scan_folder)
-        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}_original_params_1_frames_1e-3_importance_None_str1_bigpug_1_huseg_known/val_probs/'.format(args.task_set)
+        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/results/validation/val_preds_TS{}_original_params_1_frames_1e-3_importance_None_str1_bigpug_1_huseg_known_thresholded/val_probs/'.format(args.task_set)
         # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_4dpls_pretrained/val_probs/'
 
     elif args.dataset == 'kitti-raw':
@@ -146,7 +146,7 @@ if __name__ == '__main__':
         ])
         
         # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}_kitti360/val_probs/'.format(args.task_set)
-        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS1_kitti360_1_frames_1e-3_huseg_known'#.format(args.task_set)
+        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/results/validation/val_preds_TS1_kitti360_1_frames_1e-3_huseg_known_thresholded/val_probs/'#.format(args.task_set)
 
     objsem_files = load_paths(objsem_folder)
 
@@ -202,6 +202,9 @@ if __name__ == '__main__':
                 # np.save(segmented_file, instances)
                 continue
 
+            # mask out 4dpls instance predictions
+            instances[mask] = 0
+
             # segmentation with point-net
             id_ = 0
             # eps_list = [2.0, 1.0, 0.5, 0.25]
@@ -224,5 +227,8 @@ if __name__ == '__main__':
 
             new_instance = instances.max() + 1
             for idx, indices in enumerate(mapped_indices):
-                instances[indices] = new_instance + idx
+                if flat_scores[idx] < 0.1:
+                    instances[indices] = 0
+                else:
+                    instances[indices] = new_instance + idx
         np.save(segmented_file, instances)
