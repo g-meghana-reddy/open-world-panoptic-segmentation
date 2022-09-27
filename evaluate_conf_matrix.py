@@ -22,6 +22,7 @@
 #
 
 # Common libs
+import glob
 import argparse
 import signal
 import matplotlib.pyplot as plt
@@ -29,11 +30,14 @@ import seaborn as sns
 
 # Dataset
 from datasets.SemanticKitti import *
+from datasets.Kitti360 import *
 from models.architectures import KPFCNN
 from utils.config import Config
 from utils.evaluate_confusion import confusion_openset
 from utils.metrics import fast_confusion
 from utils.trainer import ModelTrainer
+from validate_kitti360 import Kitti360Config
+from validate_semanticKitti import SemanticKittiConfig
 
 import sklearn
 from tqdm import tqdm
@@ -43,181 +47,6 @@ import pdb
 np.random.seed(0)
 torch.manual_seed(0)
 torch.cuda.manual_seed_all(0)
-
-
-# ----------------------------------------------------------------------------------------------------------------------
-#
-#           Config Class
-#       \******************/
-#
-
-class SemanticKittiConfig(Config):
-    """
-    Override the parameters you want to modify for this dataset
-    """
-
-    ####################
-    # Dataset parameters
-    ####################
-
-    # Dataset name
-    dataset = 'SemanticKitti'
-
-    # Number of classes in the dataset (This value is overwritten by dataset class when Initializating dataset).
-    num_classes = None
-
-    # Type of task performed on this dataset (also overwritten)
-    dataset_task = ''
-
-    # Task set to be selected on the dataset
-    task_set = 2
-
-    # Number of CPU threads for the input pipeline
-    input_threads = 10
-
-    #########################
-    # Architecture definition
-    #########################
-
-    # Define layers
-    architecture = ['simple',
-                    'resnetb',
-                    'resnetb_strided',
-                    'resnetb',
-                    'resnetb',
-                    'resnetb_strided',
-                    'resnetb',
-                    'resnetb',
-                    'resnetb_strided',
-                    'resnetb',
-                    'resnetb',
-                    'resnetb_strided',
-                    'resnetb',
-                    'resnetb',
-                    'resnetb',
-                    'resnetb',
-                    'resnetb_strided',
-                    'resnetb',
-                    'resnetb',
-                    'nearest_upsample',
-                    'unary',
-                    'nearest_upsample',
-                    'unary',
-                    'nearest_upsample',
-                    'unary',
-                    'nearest_upsample',
-                    'unary',
-                    'nearest_upsample',
-                    'unary']
-
-
-    ###################
-    # KPConv parameters
-    ###################
-
-    # Radius of the input sphere
-    in_radius = 6.0
-    val_radius = 51.0
-    n_frames = 1 # 4
-    max_in_points = 100000
-    max_val_points = 100000
-
-    # Number of batch
-    batch_num = 4
-    val_batch_num = 1
-
-    # Number of kernel points
-    num_kernel_points = 15
-
-    # Size of the first subsampling grid in meter
-    first_subsampling_dl = 0.06 * 2
-
-    # Radius of convolution in "number grid cell". (2.5 is the standard value)
-    conv_radius = 2.5
-
-    # Radius of deformable convolution in "number grid cell". Larger so that deformed kernel can spread out
-    deform_radius = 6.0
-
-    # Radius of the area of influence of each kernel point in "number grid cell". (1.0 is the standard value)
-    KP_extent = 1.2
-
-    # Behavior of convolutions in ('constant', 'linear', 'gaussian')
-    KP_influence = 'linear'
-
-    # Aggregation function of KPConv in ('closest', 'sum')
-    aggregation_mode = 'sum'
-
-    # Choice of input features
-    first_features_dim = 256
-    in_features_dim = 3
-    free_dim = 3
-
-    # Can the network learn modulations
-    modulated = False
-
-    # Batch normalization parameters
-    use_batch_norm = True
-    batch_norm_momentum = 0.02
-
-    # Deformable offset loss
-    # 'point2point' fitting geometry by penalizing distance from deform point to input points
-    # 'point2plane' fitting geometry by penalizing distance from deform point to input point triplet (not implemented)
-    deform_fitting_mode = 'point2point'
-    deform_fitting_power = 1.0              # Multiplier for the fitting/repulsive loss
-    deform_lr_factor = 0.1                  # Multiplier for learning rate applied to the deformations
-    repulse_extent = 1.2                    # Distance of repulsion for deformed kernel points
-
-    #####################
-    # Training parameters
-    #####################
-
-    # Maximal number of epochs
-    max_epoch = 1000
-
-    # Learning rate management
-    learning_rate = 1e-4
-    momentum = 0.98
-    lr_decays = {i: 0.1 ** (1 / 200) for i in range(1, max_epoch)}
-    grad_clip_norm = 100.0
-
-    # Number of steps per epochs
-    epoch_steps = 500
-
-    # Number of validation examples per epoch
-    validation_size = 4071
-
-    # Number of epoch between each checkpoint
-    checkpoint_gap = 50
-
-    # Augmentations
-    augment_scale_anisotropic = True
-    augment_symmetries = [True, False, False]
-    augment_rotation = 'vertical'
-    augment_scale_min = 0.8
-    augment_scale_max = 1.2
-    augment_noise = 0.001
-    augment_color = 0.8
-
-    # Choose weights for class (used in segmentation loss). Empty list for no weights
-    # class proportion for R=10.0 and dl=0.08 (first is unlabeled)
-    # 19.1 48.9 0.5  1.1  5.6  3.6  0.7  0.6  0.9 193.2 17.7 127.4 6.7 132.3 68.4 283.8 7.0 78.5 3.3 0.8
-    #
-    #
-
-    # sqrt(Inverse of proportion * 100)
-    # class_w = [1.430, 14.142, 9.535, 4.226, 5.270, 11.952, 12.910, 10.541, 0.719,
-    #            2.377, 0.886, 3.863, 0.869, 1.209, 0.594, 3.780, 1.129, 5.505, 11.180]
-
-    # sqrt(Inverse of proportion * 100)  capped (0.5 < X < 5)
-    # class_w = [1.430, 5.000, 5.000, 4.226, 5.000, 5.000, 5.000, 5.000, 0.719, 2.377,
-    #            0.886, 3.863, 0.869, 1.209, 0.594, 3.780, 1.129, 5.000, 5.000]
-
-    # Do we need to save convergence
-    saving = True
-    saving_path = None
-
-    # Only train class and center head
-    pre_train = False
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -230,6 +59,9 @@ def parse_args():
     parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=2)
     parser.add_argument("-p", "--prev_train_path", help="Directory to load checkpoint", default=None)
     parser.add_argument("-i", "--chkp_idx", help="Index of checkpoint",  default=None)
+    parser.add_argument('-sk', "--semantic_kitti", dest='semantic_kitti', action="store_true", default=False)
+    parser.add_argument( '-k360', "--kitti360", dest='kitti360', action="store_true", default=False)
+    parser.add_argument("-s", "--seq", help="Sequence number", type=int, default=2)
     args = parser.parse_args()
     return args
 
@@ -247,9 +79,9 @@ if __name__ == '__main__':
     ############################
 
     # Set which gpu is going to be used
-    GPU_ID = '0'
-    if torch.cuda.device_count() > 1:
-        GPU_ID = '0, 1'
+    GPU_ID = '5'
+    # if torch.cuda.device_count() > 1:
+    #     GPU_ID = '0, 1'
 
     # Set GPU visible device
     os.environ['CUDA_VISIBLE_DEVICES'] = GPU_ID
@@ -261,10 +93,6 @@ if __name__ == '__main__':
     ###############
 
     # Choose here if you want to start training from a previous snapshot (None for new training)
-
-    # previous_training_path = 'Log_2020-06-05_17-18-35'
-    # previous_training_path = 'Log_2020-10-06_16-51-05'#'Log_2020-08-30_01-29-20'
-    # previous_training_path = ''
     # Choose index of checkpoint to start from. If None, uses the latest chkp
     # chkp_idx = None
     previous_training_path = args.prev_train_path
@@ -291,20 +119,34 @@ if __name__ == '__main__':
     print('****************')
 
     # Initialize configuration class
-    config = SemanticKittiConfig()
+    if args.semantic_kitti:
+        config = SemanticKittiConfig()
+    if args.kitti360:
+        config = Kitti360Config()
+
     if previous_training_path:
         config.load(os.path.join('results', previous_training_path))
         config.saving_path = None
     config.pre_train = False # True
     config.free_dim = 4
-    config.n_frames = 1 # 2
-    config.reinit_var = True
+    config.n_frames = 1 # 4
     config.n_test_frames = 1
     config.stride = 1
-    #config.sampling = 'objectness'
     config.sampling = 'importance'
     config.decay_sampling = 'None'
-    config.validation_size = 4071
+    
+    if args.semantic_kitti:
+        config.validation_size = 4071
+        dataset_name = 'semantic_kitti'
+    
+    if args.kitti360:
+        data_dir = 'data/Kitti360'
+        seq_dir = os.path.join(data_dir, 'data_3d_raw_labels', 
+                           '2013_05_28_drive_{:04d}_sync'.format(args.seq), 'labels')
+        config.epoch_steps = len(glob.glob(seq_dir + '/*.label'))
+        config.validation_size = config.epoch_steps
+        config.sequence = args.seq
+        dataset_name = 'kitti360'
 
     config.task_set = args.task_set
     
@@ -313,42 +155,37 @@ if __name__ == '__main__':
     else:
         return_unknowns = False
 
-    # Initialize datasets
-    # training_dataset = SemanticKittiDataset(config, set='training',
-    #                                         balance_classes=True)
-    test_dataset = SemanticKittiDataset(config, set='validation',
-                                        balance_classes=False,
-                                        return_unknowns=return_unknowns,seqential_batch=True)
+    if args.semantic_kitti:
+        # Initialize datasets
+        test_dataset = SemanticKittiDataset(config, set='validation',
+                                            balance_classes=False,
+                                            return_unknowns=return_unknowns,
+                                            seqential_batch=True)
+
+    if args.kitti360:
+        # Initialize datasets
+        test_dataset = Kitti360Dataset(config, split='validation', 
+                                       balance_classes=False, 
+                                       return_unknowns=return_unknowns, 
+                                       seqential_batch=True)
 
     # Initialize samplers
-    # training_sampler = SemanticKittiSampler(training_dataset)
     test_sampler = SemanticKittiSampler(test_dataset)
 
     # Initialize the dataloader
-    # training_loader = DataLoader(training_dataset,
-    #                              batch_size=1,
-    #                              sampler=training_sampler,
-    #                              collate_fn=SemanticKittiCollate,
-    #                              num_workers=config.input_threads,
-    #                              pin_memory=True)
     test_loader = DataLoader(test_dataset,
-                             batch_size=1,
-                             sampler=test_sampler,
-                             collate_fn=SemanticKittiCollate,
-                             num_workers=config.input_threads,
-                             pin_memory=True)
+                            batch_size=1,
+                            sampler=test_sampler,
+                            collate_fn=SemanticKittiCollate,
+                            num_workers=config.input_threads,
+                            pin_memory=True)
+
 
     # Calibrate max_in_point value
-    # training_sampler.calib_max_in(config, training_loader, verbose=True)
     test_sampler.calib_max_in(config, test_loader, verbose=True)
 
     # Calibrate samplers
-    # training_sampler.calibration(training_loader, verbose=True)
     test_sampler.calibration(test_loader, verbose=True)
-
-    # debug_timing(training_dataset, training_loader)
-    # debug_timing(test_dataset, test_loader)
-    # debug_class_w(training_dataset, training_loader)
 
     print('\nModel Preparation')
     print('*****************')
@@ -356,15 +193,13 @@ if __name__ == '__main__':
     # Define network model
     t1 = time.time()
 
-    checkpoint = torch.load(chosen_chkp) #, map_location=torch.cuda.current_device())
+    checkpoint = torch.load(chosen_chkp) 
     
     net = KPFCNN(config, test_dataset.label_values, test_dataset.ignored_labels)
     net.load_state_dict(checkpoint['model_state_dict'])
-    # self.epoch = checkpoint['epoch']
     net.eval()
 
     # Define a trainer class
-    # trainer = ModelTrainer(net, config, chkp_path=chosen_chkp)
     print('Done in {:.1f}s\n'.format(time.time() - t1))
 
     print('\nStart forward pass')
@@ -376,6 +211,7 @@ if __name__ == '__main__':
     true_unmapped_labels = []
 
     val_label_values = test_loader.dataset.label_values
+    num_classes = len(val_label_values)
     
     for batch in tqdm(test_loader):
 
@@ -398,6 +234,7 @@ if __name__ == '__main__':
         if config.task_set in [0,1]:
             unknown_labels_list = batch.val_unk_labels_list
             unknown_label_values = list(test_dataset.unknown_label_to_names.keys())
+            num_unknown_classes = len(unknown_label_values)
 
         i0 = 0
         for b_i, length in enumerate(lengths):
@@ -427,6 +264,7 @@ if __name__ == '__main__':
             true_mapped_labels += [frame_labels[proj_mask]]
             if config.task_set in [0,1]:
                 true_unmapped_labels += [frame_unknown_labels[proj_mask]]
+
 
     print('\nCreate confusion matrix')
     print('**************')
@@ -461,10 +299,6 @@ if __name__ == '__main__':
     conf_matrix_1 = np.delete(conf_matrix_1, 0, axis=0)
     conf_matrix_1 = np.delete(conf_matrix_1, 0, axis=1)
     
-    if args.task_set != 2:
-        conf_matrix_2 = np.delete(conf_matrix_2, 0, axis=0)
-        conf_matrix_2 = np.delete(conf_matrix_2, 0, axis=1)
-
     # Balance with real validation proportions
     if args.task_set == 2:
         conf_matrix_1 = conf_matrix_1.T
@@ -479,29 +313,28 @@ if __name__ == '__main__':
         plt.ylabel('Detected Class')
         plt.subplots_adjust(bottom=0.15)
         plt.show()
-        plt.savefig('confusion_matrix_ts{}_balanced.png'.format(args.task_set))
+        plt.savefig('results/confusion_matrix_ts{}_{}_balanced.png'.format(args.task_set, dataset_name))
     
     else:
-        
-        # Meghs
-        
         # Unknown to known confusion
         conf_matrix_1 = conf_matrix_1.T
-        unk_to_known_conf = np.zeros(conf_matrix_2.shape)
-        unk_to_known_conf[:, k:] = conf_matrix_2[:, k:]
-        unk_to_known_conf[:, :k] = conf_matrix_1[:-1, :k]
+        unk_to_known_conf = np.zeros((num_classes - 1, num_classes - 2 + num_unknown_classes - 1))
+        
+        unk_to_known_conf[:, num_classes - 2:] = conf_matrix_2
+        unk_to_known_conf[:, :num_classes - 2] = conf_matrix_1[:, :num_classes-2]
         unk_to_known_conf /= np.expand_dims(np.sum(unk_to_known_conf, axis = 0)+ 1e-6, 0)
         
         unk_to_known_y_labels = np.array(test_dataset.label_names)[1:-1]
-        unk_to_known_x_labels = np.concatenate([unk_to_known_y_labels, test_dataset.unknown_label_names])
-        
+        unk_to_known_x_labels = np.concatenate([unk_to_known_y_labels, test_dataset.unknown_label_names[:-1]])
+        unk_to_known_y_labels = np.array(test_dataset.label_names)[1:]
+
         plt.figure(figsize = (20,10))
         sns.heatmap(unk_to_known_conf, xticklabels=unk_to_known_x_labels, yticklabels=unk_to_known_y_labels, cmap='Blues', robust=True, square=True)
         plt.xlabel('Groundtruth Class')
         plt.ylabel('Detected Class')
         plt.subplots_adjust(bottom=0.15)
         plt.show()
-        plt.savefig('extended_confusion_matrix_ts{}_balanced.png'.format(args.task_set))
+        plt.savefig('results/extended_confusion_matrix_ts{}_{}_balanced.png'.format(args.task_set, dataset_name))
         
         # Known to Unknown confusion
         conf_matrix = conf_matrix_1.astype(np.float64)
@@ -515,7 +348,5 @@ if __name__ == '__main__':
         plt.ylabel('Detected Class')
         plt.subplots_adjust(bottom=0.15)
         plt.show()
-        plt.savefig('normal_confusion_matrix_ts{}_balanced.png'.format(args.task_set))
-
-        # Meghs
+        plt.savefig('results/normal_confusion_matrix_ts{}_{}_balanced.png'.format(args.task_set, dataset_name))
     
