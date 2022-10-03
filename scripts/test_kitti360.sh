@@ -52,6 +52,6 @@ echo "Tracking complete!"
 echo "Running evaluation"
 mkdir -p "${EVAL_OUTPUT}"
 cd utils/
-CUDA_VISIBLE_DEVICES=${gpu_id} python evaluate_panoptic.py -d ../data/Kitti360/ -p "../${TRK_OUTPUT}" -dc ../data/Kitti360/kitti-360.yaml -t ${task_set} -o "../${EVAL_OUTPUT}"
+CUDA_VISIBLE_DEVICES=${gpu_id} python evaluate_panoptic_kitti360.py -d ../data/Kitti360/ -p "../${TRK_OUTPUT}" -dc ../data/Kitti360/kitti-360.yaml -t ${task_set} -o "../${EVAL_OUTPUT}"
 cd ../
 echo "Evaluation complete!"

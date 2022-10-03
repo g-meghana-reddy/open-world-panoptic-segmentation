@@ -3,6 +3,7 @@ import pdb
 import os
 import yaml
 
+import glob
 import matplotlib.pyplot as plt
 import numpy as np
 import open3d as o3d
@@ -120,18 +121,37 @@ if __name__ == '__main__':
     #     unk_label = 10
     # else:
     #     raise ValueError('Unknown task set: {}'.format(args.task_set))
-    unk_labels = [1, 2, 3, 10]
+    if args.task_set == 1:
+        unk_labels = [1, 2, 3, 10]
+    else:
+        unk_labels = range(1, 9)
 
     if args.dataset == 'semantic-kitti':
         seq = '{:02d}'.format(args.sequence)
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/velodyne/'
         scan_files = load_paths(scan_folder)
         gt_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/labels/'
-        config_file = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti.yaml"
+        if args.task_set >= 0:
+            config_file = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti.yaml"
+        else:
+            config_file = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti-orig.yaml"
 
-        output_dir = "results/predictions/TS{}_gt_semseg/sequences/{}/predictions".format(args.task_set, seq)
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        output_dir = "/project_data/ramanan/achakrav/4D-PLS/results/predictions/TS{}_gt_semseg/sequences/{}/predictions".format(args.task_set, seq)
+
+    elif args.dataset == 'kitti360':
+        seq = '2013_05_28_drive_{:04d}_sync'.format(args.sequence)
+        scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/data_3d_raw/' + seq + '/velodyne_points/data/'
+        gt_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/data_3d_raw_labels/' + seq + '/labels/'
+        label_files = glob.glob(gt_folder + '/*')
+        file_ids = [x.split('/')[-1][:-6] for x in label_files]
+        scan_files = sorted([
+            os.path.join(scan_folder, file_id + '.bin') for file_id in file_ids
+        ])
+        config_file = "/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/kitti-360.yaml"
+        output_dir = "/project_data/ramanan/achakrav/4D-PLS/results/predictions/Kitti360/TS{}_gt_semseg/{}/predictions".format(args.task_set, seq)
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)    
 
     # load objectness predictions
     obj_folder = args.obj_folder
@@ -155,8 +175,12 @@ if __name__ == '__main__':
 
     # open config file
     doc = yaml.safe_load(open(config_file, 'r'))
-    class_remap = doc["task_set_map"][args.task_set]["learning_map"]
-    inv_learning_map_doc = doc['task_set_map'][args.task_set]['learning_map_inv']
+    if args.task_set >= 0:
+        class_remap = doc["task_set_map"][args.task_set]["learning_map"]
+        inv_learning_map_doc = doc['task_set_map'][args.task_set]['learning_map_inv']
+    else:
+        class_remap = doc["learning_map"]
+        inv_learning_map_doc = doc['learning_map_inv']
 
     # +100 hack making lut bigger just in case there are unknown labels
     maxkey = max(class_remap.keys())
@@ -197,7 +221,6 @@ if __name__ == '__main__':
             assert (len(pts_velo_cs_objects) == len(objectness_objects))
 
             if len(pts_velo_cs_objects) < 1:
-                np.save(segmented_file, frame_labels)
                 continue
 
             # segmentation with point-net
