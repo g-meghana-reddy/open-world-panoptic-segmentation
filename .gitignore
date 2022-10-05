@@ -9,3 +9,6 @@ wandb/
 **.ipynb_checkpoints
 **__pycache__
 scripts/
+outputs/
+slurm_logs/
+test/
