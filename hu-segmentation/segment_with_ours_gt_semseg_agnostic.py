@@ -123,8 +123,10 @@ if __name__ == '__main__':
     #     raise ValueError('Unknown task set: {}'.format(args.task_set))
     if args.task_set == 1:
         unk_labels = [1, 2, 3, 10]
+        raise NotImplementedError
     else:
-        unk_labels = range(1, 9)
+        # unk_labels = range(1, 9)
+        max_inst_label = 9
 
     if args.dataset == 'semantic-kitti':
         seq = '{:02d}'.format(args.sequence)
@@ -133,10 +135,10 @@ if __name__ == '__main__':
         gt_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/labels/'
         if args.task_set >= 0:
             config_file = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti.yaml"
-            output_dir = "/project_data/ramanan/achakrav/4D-PLS/results/predictions/TS{}_gt_huseg/sequences/{}/predictions".format(args.task_set, seq)
+            output_dir = "/project_data/ramanan/achakrav/4D-PLS/results/predictions/TS{}_gt_huseg_agnostic/sequences/{}/predictions".format(args.task_set, seq)
         else:
             config_file = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti-orig.yaml"
-            output_dir = "/project_data/ramanan/achakrav/4D-PLS/results/predictions/gt_huseg/sequences/{}/predictions".format(seq)
+            output_dir = "/project_data/ramanan/achakrav/4D-PLS/results/predictions/gt_huseg_agnostic/sequences/{}/predictions".format(seq)
 
 
     elif args.dataset == 'kitti360':
@@ -211,37 +213,36 @@ if __name__ == '__main__':
         labels = class_lut[frame_labels & 0xFFFF]
         instances = np.zeros_like(labels)
 
-        for unk_label in unk_labels:
-            mask = labels == unk_label
-            background_mask = labels != unk_label
+        mask = np.where(np.logical_and(labels > 0, labels < max_inst_label))
 
-            pts_velo_cs_objects = pts_velo_cs[mask]
-            objectness_objects = objectness[mask]  # todo: change objectness_objects into a local variable
-            pts_indexes_objects = pts_indexes[mask]
+        pts_velo_cs_objects = pts_velo_cs[mask]
+        objectness_objects = objectness[mask]  # todo: change objectness_objects into a local variable
+        pts_indexes_objects = pts_indexes[mask]
 
-            assert (len(pts_velo_cs_objects) == len(objectness_objects))
+        assert (len(pts_velo_cs_objects) == len(objectness_objects))
 
-            if len(pts_velo_cs_objects) < 1:
-                continue
+        if len(pts_velo_cs_objects) < 1:
+            assert False
+            continue
 
-            # segmentation with point-net
-            id_ = 0
-            # eps_list = [2.0, 1.0, 0.5, 0.25]
-            eps_list_tum = [1.2488, 0.8136, 0.6952, 0.594, 0.4353, 0.3221]
-            indices, scores = segment(id_, eps_list_tum, pts_velo_cs_objects[:, :3])
+        # segmentation with point-net
+        id_ = 0
+        # eps_list = [2.0, 1.0, 0.5, 0.25]
+        eps_list_tum = [1.2488, 0.8136, 0.6952, 0.594, 0.4353, 0.3221]
+        indices, scores = segment(id_, eps_list_tum, pts_velo_cs_objects[:, :3])
 
-            # flatten list(list(...(indices))) into list(indices)
-            flat_indices = flatten_indices(indices)
-            # map from object_indexes to pts_indexes
-            mapped_indices = []
-            for indexes in flat_indices:
-                mapped_indices.append(pts_indexes_objects[indexes].tolist())
+        # flatten list(list(...(indices))) into list(indices)
+        flat_indices = flatten_indices(indices)
+        # map from object_indexes to pts_indexes
+        mapped_indices = []
+        for indexes in flat_indices:
+            mapped_indices.append(pts_indexes_objects[indexes].tolist())
 
-            # mapped_flat_indices = pts_indexes_objects
-            flat_scores = flatten_scores(scores)
-            new_instance = instances.max() + 1
-            for idx, indices in enumerate(mapped_indices):
-                instances[indices] = new_instance + idx
+        # mapped_flat_indices = pts_indexes_objects
+        flat_scores = flatten_scores(scores)
+        new_instance = instances.max() + 1
+        for idx, indices in enumerate(mapped_indices):
+            instances[indices] = new_instance + idx
 
         # save LOSP outputs to file 
         instances = instances.astype(np.int32)
