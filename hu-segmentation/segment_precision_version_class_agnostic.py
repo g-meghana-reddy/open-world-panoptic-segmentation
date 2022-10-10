@@ -224,10 +224,6 @@ if __name__ == '__main__':
         objectness_objects = objectness[mask]  # todo: change objectness_objects into a local variable
         pts_indexes_objects = pts_indexes[mask]
 
-        # ground truth
-        sem_gt_objects = sem_gt[mask]
-        ins_gt_objects = ins_gt[mask]
-
         assert (len(pts_velo_cs_objects) == len(objectness_objects))
 
         if len(pts_velo_cs_objects) < 1:
@@ -269,9 +265,15 @@ if __name__ == '__main__':
         # update the semantic predictions using match with GTs
         # copied from eval_np
 
+        # Set up variables for coherence
+        mask_extended = np.logical_and(labels > 0 , labels < 9)
+        gt_mask = np.logical_and(sem_gt > 0 , sem_gt < 9)
+        instance_pred_obj = instances * mask_extended.astype(np.int64)
+        sem_gt_objects = sem_gt * gt_mask.astype(np.int64)
+        ins_gt_objects = ins_gt * gt_mask.astype(np.int64)
+
         # generate the areas for each unique instance prediction
         offset = 2 ** 32
-        instance_pred_obj = instances[mask]
         unique_pred, counts_pred = np.unique(instance_pred_obj[instance_pred_obj > 0], return_counts=True)
         id2idx_pred = {id: idx1 for idx1, id in enumerate(unique_pred)}
         matched_pred = np.array([False] * unique_pred.shape[0])
@@ -302,33 +304,38 @@ if __name__ == '__main__':
         matched_gt[[id2idx_gt[id] for id in gt_labels[tp_indexes]]] = True
         matched_pred[[id2idx_pred[id] for id in pred_labels[tp_indexes]]] = True
 
-        unmatched_instances = unique_pred[matched_pred == False]
-        for unmatched_ins in unmatched_instances:
+        matched_pred_idxs = [id2idx_pred[id] for id in pred_labels[tp_indexes]]
+        matched_gt_idxs = [id2idx_gt[id] for id in gt_labels[tp_indexes]]
+        unmatched_pred_idxs = [
+            idx for idx in range(unique_pred.shape[0])
+            if idx not in matched_pred_idxs
+        ]
+        for unmatched_pred_idx in unmatched_pred_idxs:
             # Reject the segments which have lower IoU overlap 
             # with GT instance labels
+            unmatched_ins = unique_pred[unmatched_pred_idx]
             unmatched_mask = instance_pred_obj == unmatched_ins
-            instances[mask][unmatched_mask] = 0.
             # Ignore the rejected segments by assigning to unlabeled class
-            labels[mask][unmatched_mask] = 0
-            # print(sem_gt_objects[unmatched_mask])
-        
-        matched_instances = unique_pred[matched_pred == True]
-        for matched_ins in matched_instances:
-            matched_mask = instance_pred_obj == matched_ins
-            # Assign GT sem labels to the good/matched segments
-            labels[mask] = np.where(matched_mask, sem_gt_objects, labels[mask])
+            instances[unmatched_mask] = 0.
+            labels[unmatched_mask] = 0.
+
+        for (matched_pred_idx, matched_gt_idx) in zip(matched_pred_idxs, matched_gt_idxs):
+            # find semantic label for transfer
+            gt_ins = unique_gt[matched_gt_idx]
+            sem_label = sem_gt_objects[ins_gt_objects == gt_ins]
+            sem_label = np.bincount(sem_label).argmax()
+
+            # transfer the label
+            pred_ins = unique_pred[matched_pred_idx]
+            labels[instances == pred_ins] = sem_label
         
         # ========================================================
 
         # Create .label files using the updated instance and semantic labels
         sem_labels = labels.astype(np.int32)
-        
         inv_sem_labels = inv_learning_map[sem_labels]
-        
         instances = np.left_shift(instances.astype(np.int32), 16)
-        
         new_preds = np.bitwise_or(instances, inv_sem_labels)
-        
         new_preds.tofile('{}/sequences/{:02d}/predictions/{:07d}.label'.format(
                 args.output_dir, args.sequence, idx))
         
