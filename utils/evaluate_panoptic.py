@@ -294,10 +294,14 @@ if __name__ == '__main__':
   PQ_dagger = np.mean([float(output_dict[c]["PQ"]) for c in things] + [float(output_dict[c]["IoU"]) for c in stuff])
   RQ_all = np.mean([float(output_dict[c]["RQ"]) for c in all_classes])
   SQ_all = np.mean([float(output_dict[c]["SQ"]) for c in all_classes])
+  Prec_all = np.mean([float(output_dict[c]["Prec"]) for c in all_classes])
+  Recall_all = np.mean([float(output_dict[c]["Recall"]) for c in all_classes])
 
   PQ_things = np.mean([float(output_dict[c]["PQ"]) for c in things])
   RQ_things = np.mean([float(output_dict[c]["RQ"]) for c in things])
   SQ_things = np.mean([float(output_dict[c]["SQ"]) for c in things])
+  Prec_things = np.mean([float(output_dict[c]["Prec"]) for c in things])
+  Recall_things = np.mean([float(output_dict[c]["Prec"]) for c in things])
 
   PQ_stuff = np.mean([float(output_dict[c]["PQ"]) for c in stuff])
   RQ_stuff = np.mean([float(output_dict[c]["RQ"]) for c in stuff])
@@ -327,6 +331,10 @@ if __name__ == '__main__':
   if FLAGS.task_set == 0 or FLAGS.task_set == 1:
     codalab_output["pq_unknown_mean"] = float(PQ_unknown)
     codalab_output["unknown_IoU"] = float(unknown_IoU)
+  codalab_output["prec_things"] = float(Prec_things)
+  codalab_output["recall_things"] = float(Recall_things)
+  codalab_output["prec_all"] = float(Prec_all)
+  codalab_output["recall_all"] = float(Recall_all)
 
   print("Completed in {} s".format(complete_time))
 
