@@ -301,7 +301,7 @@ if __name__ == '__main__':
   RQ_things = np.mean([float(output_dict[c]["RQ"]) for c in things])
   SQ_things = np.mean([float(output_dict[c]["SQ"]) for c in things])
   Prec_things = np.mean([float(output_dict[c]["Prec"]) for c in things])
-  Recall_things = np.mean([float(output_dict[c]["Prec"]) for c in things])
+  Recall_things = np.mean([float(output_dict[c]["Recall"]) for c in things])
 
   PQ_stuff = np.mean([float(output_dict[c]["PQ"]) for c in stuff])
   RQ_stuff = np.mean([float(output_dict[c]["RQ"]) for c in stuff])
