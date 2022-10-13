@@ -123,6 +123,7 @@ if __name__ == '__main__':
     class_remap = DATA["task_set_map"][FLAGS.task_set]["learning_map"]
     class_inv_remap = DATA["task_set_map"][FLAGS.task_set]["learning_map_inv"]
     class_ignore = DATA["task_set_map"][FLAGS.task_set]["learning_ignore"]
+    
   nr_classes = len(class_inv_remap)
   class_strings = DATA["labels"]
 
@@ -259,7 +260,7 @@ if __name__ == '__main__':
         'road', 'sidewalk', 'parking', 'other-ground', 'building', 'vegetation', 'trunk', 'terrain', 'fence', 'pole',
         'traffic-sign'
     ]
-  elif FLAGS.task_set == -1:
+  else:
     things = ['car', 'truck', 'bicycle', 'motorcycle', 'other-vehicle', 'person', 'bicyclist', 'motorcyclist']
     stuff = [
         'road', 'sidewalk', 'parking', 'other-ground', 'building', 'vegetation', 'trunk', 'terrain', 'fence', 'pole',
@@ -293,10 +294,14 @@ if __name__ == '__main__':
   PQ_dagger = np.mean([float(output_dict[c]["PQ"]) for c in things] + [float(output_dict[c]["IoU"]) for c in stuff])
   RQ_all = np.mean([float(output_dict[c]["RQ"]) for c in all_classes])
   SQ_all = np.mean([float(output_dict[c]["SQ"]) for c in all_classes])
+  Prec_all = np.mean([float(output_dict[c]["Prec"]) for c in all_classes])
+  Recall_all = np.mean([float(output_dict[c]["Recall"]) for c in all_classes])
 
   PQ_things = np.mean([float(output_dict[c]["PQ"]) for c in things])
   RQ_things = np.mean([float(output_dict[c]["RQ"]) for c in things])
   SQ_things = np.mean([float(output_dict[c]["SQ"]) for c in things])
+  Prec_things = np.mean([float(output_dict[c]["Prec"]) for c in things])
+  Recall_things = np.mean([float(output_dict[c]["Prec"]) for c in things])
 
   PQ_stuff = np.mean([float(output_dict[c]["PQ"]) for c in stuff])
   RQ_stuff = np.mean([float(output_dict[c]["RQ"]) for c in stuff])
@@ -304,7 +309,7 @@ if __name__ == '__main__':
   mIoU = output_dict["all"]["IoU"]
   known_IoU = np.mean([float(output_dict[c]["IoU"]) for c in all_classes if c != 'unknown'])
   # Ani
-  if FLAGS.task_set in (0, 1):
+  if FLAGS.task_set == 0 or FLAGS.task_set == 1:
     PQ_unknown = output_dict["unknown"]["PQ"]
     unknown_IoU = output_dict["unknown"]["IoU"]
 
@@ -323,9 +328,13 @@ if __name__ == '__main__':
   codalab_output["sq_things"] = float(SQ_things)
   codalab_output["known_IoU"] = float(known_IoU)
   # Ani
-  if FLAGS.task_set in (0, 1):
+  if FLAGS.task_set == 0 or FLAGS.task_set == 1:
     codalab_output["pq_unknown_mean"] = float(PQ_unknown)
     codalab_output["unknown_IoU"] = float(unknown_IoU)
+  codalab_output["prec_things"] = float(Prec_things)
+  codalab_output["recall_things"] = float(Recall_things)
+  codalab_output["prec_all"] = float(Prec_all)
+  codalab_output["recall_all"] = float(Recall_all)
 
   print("Completed in {} s".format(complete_time))
 
