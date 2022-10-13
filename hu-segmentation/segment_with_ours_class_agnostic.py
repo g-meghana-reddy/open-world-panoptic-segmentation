@@ -109,6 +109,7 @@ def parse_args():
     parser.add_argument("-d", "--dataset", help="Dataset", default='semantic-kitti')
     parser.add_argument("-s", "--sequence", help="Sequence", type=int, default=8)
     parser.add_argument("-o", "--output_dir", help="Output directory", type=str)
+    parser.add_argument("--threshold", help="Objectness threshold", type=float, default=1.)
     args = parser.parse_args()
     return args
 
@@ -201,6 +202,12 @@ if __name__ == '__main__':
     assert (len(semantic_files) == len(scan_files))
 
     for idx in tqdm(range(len(objectness_files))):
+        segmented_dir = '{}/sequences/{:02d}/predictions/'.format(
+            args.output_dir, args.sequence)
+        if not os.path.exists(segmented_dir):
+            os.makedirs(segmented_dir)
+        segmented_file = os.path.join(segmented_dir, '{:07d}.label'.format(idx))
+
         # load scan
         scan_file = scan_files[idx]
         pts_velo_cs = load_vertex(scan_file)
@@ -218,7 +225,7 @@ if __name__ == '__main__':
         instance_file = instance_files[idx]
         instances = np.load(instance_file)
         parent_dir, ins_base = os.path.split(instance_file)
-        segmented_file = os.path.join(parent_dir, ins_base.replace('_i', '_u'))
+        # segmented_file = os.path.join(parent_dir, ins_base.replace('_i', '_u'))
 
         mask = np.where(np.logical_and(labels > 0 , labels < max_inst_label))
 
@@ -254,12 +261,12 @@ if __name__ == '__main__':
 
         new_instance = instances.max() + 1
         for id, indices in enumerate(mapped_indices):
-            # if flat_scores[id] < 0.1:
-            #     instances[indices] = 0
-            # else:
-            instances[indices] = new_instance + id
-            label_counts = np.bincount(labels[indices])[:max_inst_label]
-            labels[indices] = label_counts.argmax()
+            if flat_scores[id] < args.threshold:
+                instances[indices] = -1
+            else:
+                instances[indices] = new_instance + id
+                label_counts = np.bincount(labels[indices])[:max_inst_label]
+                labels[indices] = label_counts.argmax()
         # np.save(segmented_file, instances)
 
         # Create .label files using the updated instance and semantic labels
@@ -267,5 +274,5 @@ if __name__ == '__main__':
         inv_sem_labels = inv_learning_map[sem_labels]
         instances = np.left_shift(instances.astype(np.int32), 16)
         new_preds = np.bitwise_or(instances, inv_sem_labels)
-        new_preds.tofile('{}/sequences/{:02d}/predictions/{:07d}.label'.format(
-                args.output_dir, args.sequence, idx))
+
+        new_preds.tofile(segmented_file)

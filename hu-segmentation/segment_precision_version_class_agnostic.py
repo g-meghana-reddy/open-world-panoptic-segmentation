@@ -316,8 +316,8 @@ if __name__ == '__main__':
             unmatched_ins = unique_pred[unmatched_pred_idx]
             unmatched_mask = instance_pred_obj == unmatched_ins
             # Ignore the rejected segments by assigning to unlabeled class
-            instances[unmatched_mask] = 0.
-            labels[unmatched_mask] = 0.
+            instances[unmatched_mask] = -1.
+            # labels[unmatched_mask] = 0.
 
         for (matched_pred_idx, matched_gt_idx) in zip(matched_pred_idxs, matched_gt_idxs):
             # find semantic label for transfer
