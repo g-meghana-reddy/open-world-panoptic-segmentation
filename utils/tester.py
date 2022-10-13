@@ -535,6 +535,8 @@ class ModelTester:
 
                     filename = '{:s}_{:s}.npy'.format(seq_name, frame_name)
                     filepath = join(test_path, folder, filename)
+                    filename_s = '{:s}_{:s}_s.npy'.format(seq_name, frame_name)
+                    filepath_s = join(test_path, folder, filename_s)
                     filename_i = '{:s}_{:s}_i.npy'.format(seq_name, frame_name)
                     filepath_i = join(test_path, folder, filename_i)
                     # Ani:
@@ -548,6 +550,7 @@ class ModelTester:
                     #    ins_preds = np.load(filepath_i)
                     #else:
                     frame_probs_uint8 = np.zeros((proj_mask.shape[0], nc_model), dtype=np.uint8)
+                    frame_probs_softmax = np.zeros((proj_mask.shape[0], nc_model))
                     ins_preds = np.zeros((proj_mask.shape[0]))
 
                     # Ani:
@@ -557,6 +560,7 @@ class ModelTester:
                     frame_probs = frame_probs_uint8[proj_mask, :].astype(np.float32) / 255
                     frame_probs = test_smooth * frame_probs + (1 - test_smooth) * proj_probs
                     frame_probs_uint8[proj_mask, :] = (frame_probs * 255).astype(np.uint8)
+                    frame_probs_softmax[proj_mask, :] = proj_probs
                     ins_preds[proj_mask] = proj_ins_probs
 
                     # Ani:
@@ -585,6 +589,8 @@ class ModelTester:
                                                                                  axis=1)].astype(np.int32)
 
                         np.save(filepath, frame_preds)
+                        np.save(filepath_s, frame_probs_softmax)
+                        
                         # Save some of the frame pots
 #                         if f_ind % 20 == 0:
 #                             seq_path = join(test_loader.dataset.path, 'sequences', test_loader.dataset.sequences[s_ind])
@@ -773,21 +779,21 @@ class ModelTester:
         test_path = None
         report_path = None
 
-        if config.dataset_task == '4d_panoptic':
+        #meghana if config.dataset_task == '4d_panoptic':
 
-            #assoc_saving = [asc_type for idx, asc_type in enumerate(config.association_types) if config.association_weights[idx] > 0]
-            #assoc_saving.append(str(config.n_test_frames))
-            #assoc_saving = '_'.join(assoc_saving)
-            assoc_saving = config.sampling
-            config.assoc_saving = config.sampling+'_'+ config.decay_sampling
-            if hasattr(config, 'stride'):
-                config.assoc_saving = config.sampling + '_' + config.decay_sampling+ '_str' + str(config.stride) +'_'
-            if hasattr(config, 'big_gpu') and config.big_gpu:
-                config.assoc_saving = config.assoc_saving + 'bigpug_'
+        #meghana     #assoc_saving = [asc_type for idx, asc_type in enumerate(config.association_types) if config.association_weights[idx] > 0]
+        #meghana     #assoc_saving.append(str(config.n_test_frames))
+        #meghana     #assoc_saving = '_'.join(assoc_saving)
+        #meghana     assoc_saving = config.sampling
+        #meghana     config.assoc_saving = config.sampling+'_'+ config.decay_sampling
+        #meghana     if hasattr(config, 'stride'):
+        #meghana         config.assoc_saving = config.sampling + '_' + config.decay_sampling+ '_str' + str(config.stride) +'_'
+        #meghana     if hasattr(config, 'big_gpu') and config.big_gpu:
+        #meghana         config.assoc_saving = config.assoc_saving + 'bigpug_'
 
 
         if config.saving:
-            test_path = join('test', config.saving_path.split('/')[-1]+ '_'+config.assoc_saving+str(config.n_test_frames))
+            test_path = join('test', config.saving_path.split('/')[-1])
             if not exists(test_path):
                 makedirs(test_path)
             report_path = join(test_path, 'reports')
@@ -942,6 +948,8 @@ class ModelTester:
                         pred_folder = 'predictions'
                     filename = '{:s}_{:07d}.npy'.format(seq_name, f_ind)
                     filepath = join(test_path, folder, filename)
+                    filename_s = '{:s}_{:07d}_s.npy'.format(seq_name, f_ind)
+                    filepath_s = join(test_path, folder, filename_s)
                     filename_i = '{:s}_{:07d}_i.npy'.format(seq_name, f_ind)
                     filename_c = '{:s}_{:07d}_c.npy'.format(seq_name, f_ind)
                     filepath_i = join(test_path, folder, filename_i)
@@ -1032,6 +1040,7 @@ class ModelTester:
                                                                                  axis=1)].astype(np.int32)
 
                         np.save(filepath, frame_preds)
+                        np.save(filepath_s, proj_probs)
                         #print('Saving {}'.format(filepath))
                         # Save some of the frame pots
                         if f_ind % 20 == 0:

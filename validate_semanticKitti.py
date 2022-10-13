@@ -270,12 +270,17 @@ if __name__ == '__main__':
     if previous_training_path:
         config.load(os.path.join('results', 'checkpoints', previous_training_path))
     config.free_dim = 4
-    config.n_frames = 1 # 2
+    config.n_frames = 1
     config.reinit_var = True
     config.n_test_frames = 1
-    config.stride = 1
     #config.sampling = 'objectness'
-    config.sampling = 'importance'
+    if config.nframes == 1:
+        config.stride = 1
+        config.sampling = 'importance'
+    else:
+        #n_frames==2
+        config.stride = 2
+        config.sampling = None
     config.decay_sampling = 'None'
     config.big_gpu = True
 
@@ -319,7 +324,10 @@ if __name__ == '__main__':
     print('**************')
 
     # Validation
-    tester.slam_segmentation_test(net, test_loader, config)
+    if config.n_frames > 1:
+        tester.panoptic_4d_test(net, test_loader, config)
+    else:
+        tester.slam_segmentation_test(net, test_loader, config)
 
     print('Forcing exit now')
     os.kill(os.getpid(), signal.SIGINT)

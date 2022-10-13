@@ -31,7 +31,7 @@ def main(FLAGS):
         unknown_sem_label = 7
     elif task_set == 1:
         unknown_sem_label = 10
-    elif task_set == 2:
+    elif task_set == 2 or task_set == -1:
         unknown_sem_label = 0
 
     if FLAGS.baseline:
@@ -42,8 +42,13 @@ def main(FLAGS):
     # get number of interest classes, and the label mappings class
     with open(FLAGS.data_cfg, 'r') as stream:
         doc = yaml.safe_load(stream)
-        learning_map_doc = doc['task_set_map'][task_set]['learning_map']
-        inv_learning_map_doc = doc['task_set_map'][task_set]['learning_map_inv']
+
+        if task_set == -1:
+            learning_map_doc = doc['learning_map']
+            inv_learning_map_doc = doc['learning_map_inv']
+        else:
+            learning_map_doc = doc['task_set_map'][task_set]['learning_map']
+            inv_learning_map_doc = doc['task_set_map'][task_set]['learning_map_inv']
     
     inv_learning_map = np.zeros((np.max([k for k in inv_learning_map_doc.keys()]) + 1), 
                                 dtype=np.int32)

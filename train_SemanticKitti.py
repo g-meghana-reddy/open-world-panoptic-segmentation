@@ -299,9 +299,14 @@ if __name__ == '__main__':
     config.n_frames = 1 # 4
     config.reinit_var = True
     config.n_test_frames = 1
-    config.stride = 1
     #config.sampling = 'objectness'
-    config.sampling = 'importance'
+    if config.n_frames == 1:
+        config.stride = 1
+        config.sampling = 'importance'
+    else:
+        # nframes == 2
+        config.stride = 2
+        config.sampling = None
     config.decay_sampling = 'None'
     # Get path from argument if given
     # if len(sys.argv) > 1:

@@ -116,9 +116,11 @@ if __name__ == '__main__':
 
     args = parse_args()
     if args.task_set == 0:
-        unk_label = 7
+        unk_labels = [7]
     elif args.task_set == 1:
-        unk_label = 10
+        unk_label = [10]
+    elif args.task_set == -1:
+        unk_labels = range(1,9)
     else:
         raise ValueError('Unknown task set: {}'.format(args.task_set))
 
@@ -151,9 +153,15 @@ if __name__ == '__main__':
         if '_c.' in file:
             obj_file_mask.append(idx)
         elif '_i.' in file:
-            ins_file_mask.append(idx)
-        elif '_e.' not in file and '_u.' not in file and '_t.' not in file and '_pots.' not in file and '.ply' not in file:
-            sem_file_mask.append(idx)
+            # Added for nframes=2
+            frame_name = file.split('/')[-1]
+            if len(frame_name.split('_')) < 4:
+                ins_file_mask.append(idx)
+        elif '_e.' not in file and '_u.' not in file and '_t.' not in file and '_pots.' not in file and '.ply' not in file and '_s.' not in file:
+            # Added for nframes=2
+            frame_name = file.split('/')[-1]
+            if len(frame_name.split('_')) < 3:
+                sem_file_mask.append(idx)
     
     objectness_files = objsem_files[obj_file_mask]
     semantic_files = objsem_files[sem_file_mask]
@@ -182,40 +190,41 @@ if __name__ == '__main__':
         parent_dir, ins_base = os.path.split(instance_file)
         segmented_file = os.path.join(parent_dir, ins_base.replace('_i', '_u'))
 
-        mask = labels == unk_label
-        background_mask = labels != unk_label
+        for unk_label in unk_labels:
+            mask = labels == unk_label
+            background_mask = labels != unk_label
 
-        pts_velo_cs_objects = pts_velo_cs[mask]
-        objectness_objects = objectness[mask]  # todo: change objectness_objects into a local variable
-        pts_indexes_objects = pts_indexes[mask]
+            pts_velo_cs_objects = pts_velo_cs[mask]
+            objectness_objects = objectness[mask]  # todo: change objectness_objects into a local variable
+            pts_indexes_objects = pts_indexes[mask]
 
-        assert (len(pts_velo_cs_objects) == len(objectness_objects))
+            assert (len(pts_velo_cs_objects) == len(objectness_objects))
 
-        if len(pts_velo_cs_objects) < 1:
-            np.save(segmented_file, instances)
-            continue
+            if len(pts_velo_cs_objects) < 1:
+                np.save(segmented_file, instances)
+                continue
 
-        # segmentation with point-net
-        id_ = 0
-        # eps_list = [2.0, 1.0, 0.5, 0.25]
-        eps_list_tum = [1.2488, 0.8136, 0.6952, 0.594, 0.4353, 0.3221]
-        indices, scores = segment(id_, eps_list_tum, pts_velo_cs_objects[:, :3])
+            # segmentation with point-net
+            id_ = 0
+            # eps_list = [2.0, 1.0, 0.5, 0.25]
+            eps_list_tum = [1.2488, 0.8136, 0.6952, 0.594, 0.4353, 0.3221]
+            indices, scores = segment(id_, eps_list_tum, pts_velo_cs_objects[:, :3])
 
-        # flatten list(list(...(indices))) into list(indices)
-        flat_indices = flatten_indices(indices)
-        # map from object_indexes to pts_indexes
-        mapped_indices = []
-        for indexes in flat_indices:
-            mapped_indices.append(pts_indexes_objects[indexes].tolist())
+            # flatten list(list(...(indices))) into list(indices)
+            flat_indices = flatten_indices(indices)
+            # map from object_indexes to pts_indexes
+            mapped_indices = []
+            for indexes in flat_indices:
+                mapped_indices.append(pts_indexes_objects[indexes].tolist())
 
-        # mapped_flat_indices = pts_indexes_objects
-        flat_scores = flatten_scores(scores)
+            # mapped_flat_indices = pts_indexes_objects
+            flat_scores = flatten_scores(scores)
 
-        # save results
-        # np.savez_compressed(os.path.join(write_dir, seq + '_'+str(idx).zfill(6)),
-        #                     instances=mapped_indices, segment_scores=flat_scores, allow_pickle = True)
+            # save results
+            # np.savez_compressed(os.path.join(write_dir, seq + '_'+str(idx).zfill(6)),
+            #                     instances=mapped_indices, segment_scores=flat_scores, allow_pickle = True)
 
-        new_instance = instances.max() + 1
-        for idx, indices in enumerate(mapped_indices):
-            instances[indices] = new_instance + idx
+            new_instance = instances.max() + 1
+            for idx, indices in enumerate(mapped_indices):
+                instances[indices] = new_instance + idx
         np.save(segmented_file, instances)
