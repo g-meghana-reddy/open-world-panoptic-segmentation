@@ -332,8 +332,22 @@ if __name__ == '__main__':
   codalab_output["known_IoU"] = float(known_IoU)
   # Ani
   if FLAGS.task_set != 2:
-    codalab_output["pq_catch_all_mean"] = float(PQ_unknown)
-    codalab_output["catch_all_IoU"] = float(unknown_IoU)
+    codalab_output["pq_known_things_mean"] = float(PQ_known_things)
+    codalab_output["pq_known_stuff_mean"] = float(PQ_known_stuff)
+    codalab_output["prec_known_things"] = float(Prec_known_things)
+    codalab_output["recall_known_things"] = float(Recall_known_things)
+
+    codalab_output["pq_unknown_mean"] = float(PQ_unknown)
+    codalab_output["rq_unknown_mean"] = float(RQ_unknown)
+    codalab_output["sq_unknown_mean"] = float(SQ_unknown)
+    codalab_output["prec_unknown"] = float(Prec_unknown)
+    codalab_output["recall_unknown"] = float(Recall_unknown)
+    codalab_output["unknown_IoU"] = float(unknown_IoU)
+
+  codalab_output["prec_things"] = float(Prec_things)
+  codalab_output["recall_things"] = float(Recall_things)
+  codalab_output["prec_all"] = float(Prec_all)
+  codalab_output["recall_all"] = float(Recall_all)
 
   print("Completed in {} s".format(complete_time))
 
