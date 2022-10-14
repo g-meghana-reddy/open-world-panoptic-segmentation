@@ -279,23 +279,39 @@ if __name__ == '__main__':
     output_dict[class_str]["Recall"] = class_all_Recall[idx]
   
   PQ_all = np.mean([float(output_dict[c]["PQ"]) for c in all_classes])
-  PQ_known = np.mean([float(output_dict[c]["PQ"]) for c in all_classes if c != 'unknown'])
+  PQ_known = np.mean([float(output_dict[c]["PQ"]) for c in all_classes if c != 'catch-all'])
   PQ_dagger = np.mean([float(output_dict[c]["PQ"]) for c in things] + [float(output_dict[c]["IoU"]) for c in stuff])
   RQ_all = np.mean([float(output_dict[c]["RQ"]) for c in all_classes])
+  RQ_known = np.mean([float(output_dict[c]["RQ"]) for c in all_classes if c != 'catch-all'])
   SQ_all = np.mean([float(output_dict[c]["SQ"]) for c in all_classes])
+  SQ_known = np.mean([float(output_dict[c]["SQ"]) for c in all_classes if c != 'catch-all'])
+  Prec_all = np.mean([float(output_dict[c]["Prec"]) for c in all_classes])
+  Recall_all = np.mean([float(output_dict[c]["Recall"]) for c in all_classes])
 
   PQ_things = np.mean([float(output_dict[c]["PQ"]) for c in things])
   RQ_things = np.mean([float(output_dict[c]["RQ"]) for c in things])
   SQ_things = np.mean([float(output_dict[c]["SQ"]) for c in things])
+  Prec_things = np.mean([float(output_dict[c]["Prec"]) for c in things])
+  Recall_things = np.mean([float(output_dict[c]["Recall"]) for c in things])
 
   PQ_stuff = np.mean([float(output_dict[c]["PQ"]) for c in stuff])
   RQ_stuff = np.mean([float(output_dict[c]["RQ"]) for c in stuff])
   SQ_stuff = np.mean([float(output_dict[c]["SQ"]) for c in stuff])
   mIoU = output_dict["all"]["IoU"]
-  known_IoU = np.mean([float(output_dict[c]["IoU"]) for c in all_classes if c != 'unknown'])
+  known_IoU = np.mean([float(output_dict[c]["IoU"]) for c in all_classes if c != 'catch-all'])
   # Ani
   if FLAGS.task_set != 2:
+    PQ_known_things = np.mean([float(output_dict[c]["PQ"]) for c in things if c != 'catch-all'])
+    PQ_known_stuff = np.mean([float(output_dict[c]["PQ"]) for c in stuff])
+
+    Prec_known_things = np.mean([float(output_dict[c]["Prec"]) for c in things if c != 'catch-all'])
+    Recall_known_things = np.mean([float(output_dict[c]["Recall"]) for c in things if c != 'catch-all'])
+
     PQ_unknown = output_dict["catch-all"]["PQ"]
+    RQ_unknown = output_dict["catch-all"]["RQ"]
+    SQ_unknown = output_dict["catch-all"]["SQ"]
+    Prec_unknown = output_dict["catch-all"]["Prec"]
+    Recall_unknown = output_dict["catch-all"]["Recall"]
     unknown_IoU = output_dict["catch-all"]["IoU"]
 
   codalab_output = {}
@@ -303,7 +319,9 @@ if __name__ == '__main__':
   codalab_output["pq_known_mean"] = float(PQ_known)
   codalab_output["pq_dagger"] = float(PQ_dagger)
   codalab_output["sq_mean"] = float(SQ_all)
+  codalab_output["sq_known_mean"] = float(SQ_known)
   codalab_output["rq_mean"] = float(RQ_all)
+  codalab_output["rq_known_mean"] = float(RQ_known)
   codalab_output["iou_mean"] = float(mIoU)
   codalab_output["pq_stuff"] = float(PQ_stuff)
   codalab_output["rq_stuff"] = float(RQ_stuff)
@@ -314,8 +332,22 @@ if __name__ == '__main__':
   codalab_output["known_IoU"] = float(known_IoU)
   # Ani
   if FLAGS.task_set != 2:
-    codalab_output["pq_catch_all_mean"] = float(PQ_unknown)
-    codalab_output["catch_all_IoU"] = float(unknown_IoU)
+    codalab_output["pq_known_things_mean"] = float(PQ_known_things)
+    codalab_output["pq_known_stuff_mean"] = float(PQ_known_stuff)
+    codalab_output["prec_known_things"] = float(Prec_known_things)
+    codalab_output["recall_known_things"] = float(Recall_known_things)
+
+    codalab_output["pq_unknown_mean"] = float(PQ_unknown)
+    codalab_output["rq_unknown_mean"] = float(RQ_unknown)
+    codalab_output["sq_unknown_mean"] = float(SQ_unknown)
+    codalab_output["prec_unknown"] = float(Prec_unknown)
+    codalab_output["recall_unknown"] = float(Recall_unknown)
+    codalab_output["unknown_IoU"] = float(unknown_IoU)
+
+  codalab_output["prec_things"] = float(Prec_things)
+  codalab_output["recall_things"] = float(Recall_things)
+  codalab_output["prec_all"] = float(Prec_all)
+  codalab_output["recall_all"] = float(Recall_all)
 
   print("Completed in {} s".format(complete_time))
 
