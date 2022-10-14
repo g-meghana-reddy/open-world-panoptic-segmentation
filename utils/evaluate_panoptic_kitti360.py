@@ -243,10 +243,10 @@ if __name__ == '__main__':
   # output_dict["raw"]["class_all_IoU"] = class_all_IoU
 
   if FLAGS.task_set == 0:
-    things = ['car', 'person', 'catch-all']
+    things = ['car', 'person', 'unknown']
     stuff = ['road', 'building', 'vegetation', 'fence']
   if FLAGS.task_set == 1:
-    things = ['car', 'person', 'truck', 'catch-all']
+    things = ['car', 'person', 'truck', 'unknown']
     stuff = ['road', 'building', 'vegetation', 'fence', 'sidewalk', 'terrain']
   elif FLAGS.task_set == 2:
     # things = ['car', 'truck', 'bicycle', 'motorcycle', 'other-vehicle', 'person', 'bicyclist', 'motorcyclist']
@@ -282,11 +282,17 @@ if __name__ == '__main__':
   PQ_known = np.mean([float(output_dict[c]["PQ"]) for c in all_classes if c != 'unknown'])
   PQ_dagger = np.mean([float(output_dict[c]["PQ"]) for c in things] + [float(output_dict[c]["IoU"]) for c in stuff])
   RQ_all = np.mean([float(output_dict[c]["RQ"]) for c in all_classes])
+  RQ_known = np.mean([float(output_dict[c]["RQ"]) for c in all_classes if c != 'unknown'])
   SQ_all = np.mean([float(output_dict[c]["SQ"]) for c in all_classes])
+  SQ_known = np.mean([float(output_dict[c]["SQ"]) for c in all_classes if c != 'unknown'])
+  Prec_all = np.mean([float(output_dict[c]["Prec"]) for c in all_classes])
+  Recall_all = np.mean([float(output_dict[c]["Recall"]) for c in all_classes])
 
   PQ_things = np.mean([float(output_dict[c]["PQ"]) for c in things])
   RQ_things = np.mean([float(output_dict[c]["RQ"]) for c in things])
   SQ_things = np.mean([float(output_dict[c]["SQ"]) for c in things])
+  Prec_things = np.mean([float(output_dict[c]["Prec"]) for c in things])
+  Recall_things = np.mean([float(output_dict[c]["Recall"]) for c in things])
 
   PQ_stuff = np.mean([float(output_dict[c]["PQ"]) for c in stuff])
   RQ_stuff = np.mean([float(output_dict[c]["RQ"]) for c in stuff])
@@ -295,15 +301,27 @@ if __name__ == '__main__':
   known_IoU = np.mean([float(output_dict[c]["IoU"]) for c in all_classes if c != 'unknown'])
   # Ani
   if FLAGS.task_set != 2:
-    PQ_unknown = output_dict["catch-all"]["PQ"]
-    unknown_IoU = output_dict["catch-all"]["IoU"]
+    PQ_known_things = np.mean([float(output_dict[c]["PQ"]) for c in things if c != 'unknown'])
+    PQ_known_stuff = np.mean([float(output_dict[c]["PQ"]) for c in stuff])
+
+    Prec_known_things = np.mean([float(output_dict[c]["Prec"]) for c in things if c != 'unknown'])
+    Recall_known_things = np.mean([float(output_dict[c]["Recall"]) for c in things if c != 'unknown'])
+
+    PQ_unknown = output_dict["unknown"]["PQ"]
+    RQ_unknown = output_dict["unknown"]["RQ"]
+    SQ_unknown = output_dict["unknown"]["SQ"]
+    Prec_unknown = output_dict["unknown"]["Prec"]
+    Recall_unknown = output_dict["unknown"]["Recall"]
+    unknown_IoU = output_dict["unknown"]["IoU"]
 
   codalab_output = {}
   codalab_output["pq_mean"] = float(PQ_all)
   codalab_output["pq_known_mean"] = float(PQ_known)
   codalab_output["pq_dagger"] = float(PQ_dagger)
   codalab_output["sq_mean"] = float(SQ_all)
+  codalab_output["sq_known_mean"] = float(SQ_known)
   codalab_output["rq_mean"] = float(RQ_all)
+  codalab_output["rq_known_mean"] = float(RQ_known)
   codalab_output["iou_mean"] = float(mIoU)
   codalab_output["pq_stuff"] = float(PQ_stuff)
   codalab_output["rq_stuff"] = float(RQ_stuff)
@@ -314,8 +332,22 @@ if __name__ == '__main__':
   codalab_output["known_IoU"] = float(known_IoU)
   # Ani
   if FLAGS.task_set != 2:
-    codalab_output["pq_catch_all_mean"] = float(PQ_unknown)
-    codalab_output["catch_all_IoU"] = float(unknown_IoU)
+    codalab_output["pq_known_things_mean"] = float(PQ_known_things)
+    codalab_output["pq_known_stuff_mean"] = float(PQ_known_stuff)
+    codalab_output["prec_known_things"] = float(Prec_known_things)
+    codalab_output["recall_known_things"] = float(Recall_known_things)
+
+    codalab_output["pq_unknown_mean"] = float(PQ_unknown)
+    codalab_output["rq_unknown_mean"] = float(RQ_unknown)
+    codalab_output["sq_unknown_mean"] = float(SQ_unknown)
+    codalab_output["prec_unknown"] = float(Prec_unknown)
+    codalab_output["recall_unknown"] = float(Recall_unknown)
+    codalab_output["unknown_IoU"] = float(unknown_IoU)
+
+  codalab_output["prec_things"] = float(Prec_things)
+  codalab_output["recall_things"] = float(Recall_things)
+  codalab_output["prec_all"] = float(Prec_all)
+  codalab_output["recall_all"] = float(Recall_all)
 
   print("Completed in {} s".format(complete_time))
 
