@@ -1,4 +1,4 @@
-for i in {0,0.05,0.1,0.15,0.2,0.25,0.30,0.35,0.40,0.45,0.5}; do
+for i in {0.0,0.005,0.01,0.015,0.02,0.025,0.03,0.035,0.04,0.045,0.05}; do
     cd /project_data/ramanan/achakrav/4D-PLS/utils/
     pred_dir="../results/predictions/4dpls_huseg_agnostic_thresh_$i"
     cmd="python3 segment_with_ours_class_agnostic.py -t -1 -o $pred_dir --threshold $i"

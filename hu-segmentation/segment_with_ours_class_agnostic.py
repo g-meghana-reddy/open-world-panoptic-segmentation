@@ -125,7 +125,7 @@ if __name__ == '__main__':
     #     raise ValueError('Unknown task set: {}'.format(args.task_set))
     # unk_labels = range(1, 7)
     if args.task_set == 1:
-        max_inst_label = 7
+        max_inst_label = 4
     elif args.task_set == -1:
         max_inst_label = 9
     else:
@@ -227,7 +227,10 @@ if __name__ == '__main__':
         parent_dir, ins_base = os.path.split(instance_file)
         # segmented_file = os.path.join(parent_dir, ins_base.replace('_i', '_u'))
 
-        mask = np.where(np.logical_and(labels > 0 , labels < max_inst_label))
+        if args.task_set == 1:
+            mask = np.where(np.logical_and(labels > 0 , labels < max_inst_label, labels == 10))
+        else:
+            mask = np.where(np.logical_and(labels > 0 , labels < max_inst_label))
 
         pts_velo_cs_objects = pts_velo_cs[mask]
         objectness_objects = objectness[mask]  # todo: change objectness_objects into a local variable
@@ -261,12 +264,12 @@ if __name__ == '__main__':
 
         new_instance = instances.max() + 1
         for id, indices in enumerate(mapped_indices):
-            if flat_scores[id] < args.threshold:
-                instances[indices] = -1
-            else:
-                instances[indices] = new_instance + id
-                label_counts = np.bincount(labels[indices])[:max_inst_label]
-                labels[indices] = label_counts.argmax()
+            # if flat_scores[id] < args.threshold:
+            #     instances[indices] = -1
+            # else:
+            instances[indices] = new_instance + id
+            # label_counts = np.bincount(labels[indices])[:max_inst_label]
+            # labels[indices] = label_counts.argmax()
         # np.save(segmented_file, instances)
 
         # Create .label files using the updated instance and semantic labels
