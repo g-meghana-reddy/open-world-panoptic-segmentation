@@ -274,7 +274,7 @@ if __name__ == '__main__':
     config.reinit_var = True
     config.n_test_frames = 1
     #config.sampling = 'objectness'
-    if config.nframes == 1:
+    if config.n_frames == 1:
         config.stride = 1
         config.sampling = 'importance'
     else:
