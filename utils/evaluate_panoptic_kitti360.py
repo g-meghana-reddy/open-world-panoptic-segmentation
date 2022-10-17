@@ -188,6 +188,11 @@ if __name__ == '__main__':
       u_label_sem_cat = u_label_sem_cat[:FLAGS.limit]
       u_label_inst = u_label_inst[:FLAGS.limit]
 
+    # building has instance labels in KITTI-360
+    if FLAGS.task_set == 1:
+      building_mask = u_label_sem_class == 6
+      u_label_inst[building_mask] = 3200
+
     label = np.fromfile(pred_file, dtype=np.uint32)
 
     u_pred_sem_class = class_lut[label & 0xFFFF]  # remap to xentropy format
