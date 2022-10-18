@@ -12,3 +12,4 @@ scripts/
 outputs/
 slurm_logs/
 test/
+segment_classifier/

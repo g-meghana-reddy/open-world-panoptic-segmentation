@@ -27,3 +27,18 @@ def flatten_scores(scores):
         if isinstance(score, float): flat_scores.append(score)
         else: flat_scores.extend(flatten_scores(score))
     return flat_scores
+
+class Segment():
+  def __init__(self, indices, score):
+    self.indices = indices
+    self.score = score
+
+class TreeSegment():
+  def __init__(self, indices, score):
+    self.child_segments = None
+    self.curr_segment_data = Segment(indices, score)
+    
+
+
+  
+
