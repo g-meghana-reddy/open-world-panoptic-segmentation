@@ -56,7 +56,7 @@ import pdb
 class SemanticKittiDataset(PointCloudDataset):
     """Class to handle SemanticKitti dataset."""
 
-    def __init__(self, config, set='training', balance_classes=True, seqential_batch = False, return_unknowns = False):
+    def __init__(self, config, set='training', balance_classes=True, seqential_batch = False, return_unknowns = False, datapath = None):
         PointCloudDataset.__init__(self, 'SemanticKitti')
 
         ##########################
@@ -64,7 +64,10 @@ class SemanticKittiDataset(PointCloudDataset):
         ##########################
 
         # Dataset folder
-        self.path = 'data/SemanticKitti'
+        if datapath is None:
+            self.path = 'data/SemanticKitti'
+        else:
+            self.path = datapath
 
         # Type of task conducted on this dataset
         self.dataset_task = 'slam_segmentation'
@@ -109,11 +112,11 @@ class SemanticKittiDataset(PointCloudDataset):
         # Read labels
         #TODO: revert back
         if config.task_set == -1:
-            config_file = join('data/SemanticKitti/', 'semantic-kitti-orig.yaml')
+            config_file = join(self.path, 'semantic-kitti-orig.yaml')
         elif config.n_frames == 1:
-            config_file = join('data/SemanticKitti/', 'semantic-kitti.yaml')
+            config_file = join(self.path, 'semantic-kitti.yaml')
         elif config.n_frames > 1:
-            config_file = join('data/SemanticKitti/', 'semantic-kitti.yaml')
+            config_file = join(self.path, 'semantic-kitti.yaml')
         else:
             raise ValueError('number of frames has to be >= 1')
 
