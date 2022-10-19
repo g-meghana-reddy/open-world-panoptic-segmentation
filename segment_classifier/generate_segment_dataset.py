@@ -88,7 +88,10 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
 
     # Start test loop
     while True:
-        for _, batch in enumerate(test_loader):
+        for idx, batch in enumerate(test_loader):
+
+            if idx % 10 != 0:
+                continue
 
             if 'cuda' in device.type:
                 batch.to(device)
@@ -245,6 +248,7 @@ def generate_segments_per_scan(scan_file, frame_emb_preds, frame_gt_labels,frame
     pts_embeddings_objects = frame_emb_preds[things_mask]
     gt_instance_ids_objects = frame_gt_ins_labels[things_mask]
     gt_instance_indexes_objects = np.arange(frame_gt_ins_labels.shape[0])[things_mask]
+    gt_semantic_labels = frame_gt_labels[things_mask]
 
     if len(pts_velo_cs_objects) < 1:
         return
@@ -268,8 +272,8 @@ def generate_segments_per_scan(scan_file, frame_emb_preds, frame_gt_labels,frame
     #********************************************************************
     # Traverse the computed hierarchical tree to store the segments
     #********************************************************************
-    segment_tree_traverse(segment_tree, pts_embeddings_objects, pts_velo_cs_objects, filepath, 0, set())
-    exit(0)
+    segment_tree_traverse(segment_tree, pts_embeddings_objects, pts_velo_cs_objects, gt_semantic_labels, filepath, 0, set())
+    
     return
 
 if __name__ == '__main__':
@@ -282,9 +286,9 @@ if __name__ == '__main__':
     print('*****************************')
 
     # Set which gpu is going to be used
-    GPU_ID = '0'
-    if torch.cuda.device_count() > 1:
-        GPU_ID = '0, 1'
+    GPU_ID = '4'
+    # if torch.cuda.device_count() > 1:
+    #     GPU_ID = '0, 1'
 
     # Set GPU visible device
     os.environ['CUDA_VISIBLE_DEVICES'] = GPU_ID
@@ -352,9 +356,9 @@ if __name__ == '__main__':
 
     # Initialize datasets
     training_dataset = SemanticKittiDataset(config, set='training',
-                                            balance_classes=True, seqential_batch=True, datapath= '../data/SemanticKitti')
+                                              balance_classes=False, datapath= '../data/SemanticKitti')
     test_dataset = SemanticKittiDataset(config, set='validation',
-                                        balance_classes=False, datapath= '../data/SemanticKitti')
+                                        balance_classes=False, seqential_batch = True, datapath= '../data/SemanticKitti')
 
     # Initialize samplers
     training_sampler = SemanticKittiSampler(training_dataset)
@@ -365,13 +369,13 @@ if __name__ == '__main__':
                                  batch_size=1,
                                  sampler=training_sampler,
                                  collate_fn=SemanticKittiCollate,
-                                 num_workers=config.input_threads,
+                                 num_workers=0,#config.input_threads,
                                  pin_memory=True)
     test_loader = DataLoader(test_dataset,
                              batch_size=1,
                              sampler=test_sampler,
                              collate_fn=SemanticKittiCollate,
-                             num_workers=config.input_threads,
+                             num_workers=0,#config.input_threads,
                              pin_memory=True)
 
     #****************************************************

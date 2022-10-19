@@ -79,34 +79,42 @@ def compute_hierarchical_tree(eps_list, points_3d, pts_indexes_objects, gt_insta
     return segments
 
 
-def segment_tree_traverse(segment_tree, pts_embeddings_objects, pts_velo_cs_objects, filepath, segment_index, visited_indices):
+def segment_tree_traverse(segment_tree, pts_embeddings_objects, pts_velo_cs_objects, gt_semantic_labels, filepath, segment_index, visited_indices):
     '''Traversal of the hierarchical tree.'''
     if len(segment_tree.curr_segment_data.indices) == 0:
         return segment_index
     
-    if segment_tree.curr_segment_data.score < 0.2 or segment_tree.curr_segment_data.score >= 0.5 :
-        
-        if tuple(segment_tree.curr_segment_data.indices.tolist()) not in visited_indices:
-            # print("----------------------------------------------")
-            # print("Segment indices: ", segment_tree.curr_segment_data.indices)
-            # print("Segment score: ", segment_tree.curr_segment_data.score)
-            # print("----------------------------------------------")
-            filename = filepath + '_' + '{:07d}.json'.format(segment_index)
+    if len(segment_tree.curr_segment_data.indices) > 50:
+        if segment_tree.curr_segment_data.score < 0.2 or segment_tree.curr_segment_data.score >= 0.7 :
+            
+            if tuple(segment_tree.curr_segment_data.indices.tolist()) not in visited_indices:
+                # print("----------------------------------------------")
+                # print("Segment indices: ", segment_tree.curr_segment_data.indices)
+                # print("Segment score: ", segment_tree.curr_segment_data.score)
+                # print("----------------------------------------------")
+                if segment_tree.curr_segment_data.score < 0.2:
+                    gt_label = 0
+                else:
+                    gt_label = 1
 
-            segment_data = {}
-            segment_data['name'] = filename.split('/')[-1][:-5]
-            segment_data['indices'] = segment_tree.curr_segment_data.indices.tolist()
-            segment_data['objectness_score'] = segment_tree.curr_segment_data.score
-            segment_data['xyz_features'] = pts_velo_cs_objects[segment_tree.curr_segment_data.indices].tolist()
-            segment_data['semantic_features'] = pts_embeddings_objects[segment_tree.curr_segment_data.indices].tolist()
+                filename = filepath + '_' + '{:07d}.json'.format(segment_index)
 
-            with open(filename, 'w') as outfile:
-                json.dump(segment_data, outfile)
+                segment_data = {}
+                segment_data['name'] = filename.split('/')[-1][:-5]
+                segment_data['indices'] = segment_tree.curr_segment_data.indices.tolist()
+                segment_data['objectness_score'] = segment_tree.curr_segment_data.score
+                segment_data['xyz_features'] = pts_velo_cs_objects[segment_tree.curr_segment_data.indices].tolist()
+                segment_data['semantic_features'] = pts_embeddings_objects[segment_tree.curr_segment_data.indices].tolist()
+                segment_data['gt_label'] = gt_label
+                segment_data['semantic_label'] = int(np.bincount(gt_semantic_labels[segment_tree.curr_segment_data.indices].astype(int)).argmax())
 
-            segment_index += 1
-            visited_indices.add(tuple(segment_data['indices']))
+                with open(filename, 'w') as outfile:
+                    json.dump(segment_data, outfile)
+
+                segment_index += 1
+                visited_indices.add(tuple(segment_data['indices']))
 
     for segment in segment_tree.child_segments:  
-        segment_index = segment_tree_traverse(segment, pts_embeddings_objects, pts_velo_cs_objects, filepath, segment_index, visited_indices)
+        segment_index = segment_tree_traverse(segment, pts_embeddings_objects, pts_velo_cs_objects, gt_semantic_labels, filepath, segment_index, visited_indices)
 
     return segment_index

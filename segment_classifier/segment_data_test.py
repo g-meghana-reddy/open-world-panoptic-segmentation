@@ -7,7 +7,7 @@ import torch
 
 if __name__ == '__main__':
 
-    train_dataset = Segment_dataset('segment_classifier/segment_dataset')
+    train_dataset = Segment_dataset('segment_dataset', 'training')
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=1,

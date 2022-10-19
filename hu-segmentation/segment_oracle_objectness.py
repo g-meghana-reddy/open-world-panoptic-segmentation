@@ -65,7 +65,6 @@ def segment(id_, eps_list, cloud, original_indices=None, aggr_func='min'):
         inds = original_indices[np.flatnonzero(labels == unique_label)]
         indices.append(inds.tolist())
         scores.append(evaluate_iou_based_objectness(inds))
-        print(" indices: {}, scores: {}".format(inds.tolist(), evaluate_iou_based_objectness(inds)))
 
     # Return if we are done
     if len(eps_list) == 1: return indices, scores
@@ -186,7 +185,8 @@ if __name__ == '__main__':
         seq = '{:02d}'.format(args.sequence)
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/velodyne/'
         scan_files = load_paths(scan_folder)
-        objsem_folder = '/project_data/ramanan/mganesin/4D-PLS/test/val_preds_TS-1_4DPLS_LOSP_nframes2_stride_smapling/val_probs'
+        objsem_folder = '/project_data/ramanan/mganesin/4D-PLS/test/4DPLS_original_params_original_repo_nframes1_1e-3_softmax/val_probs'
+        # objsem_folder = '/project_data/ramanan/mganesin/4D-PLS/test/val_preds_TS-1_4DPLS_LOSP_nframes2_stride_smapling/val_probs'
         # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/results/validation/val_preds_TS{}_original_params_1_frames_1e-3_importance_None_str1_bigpug_1_huseg_known/val_probs/'.format(args.task_set)
         label_folder = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/" + seq + "/labels/"
         label_files = sorted(glob.glob(label_folder + "*.label"))
@@ -336,7 +336,7 @@ if __name__ == '__main__':
             # else:
             instances[indices] = new_instance + id
             # majority semantic label in the segment is the new assignment
-            labels[indices] = np.bincount(labels[indices]).argmax()
+            labels[indices] = np.bincount(sem_gt[indices]).argmax()
 
             # softmax based label transfer
             # things_softmax = softmax_scores[indices][:, :8]

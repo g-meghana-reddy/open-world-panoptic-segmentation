@@ -5,12 +5,22 @@ import numpy as np
 
 class Segment_dataset():
 
-    def __init__(self, dataset_path):
+    def __init__(self, dataset_path, split= 'training'):
         self.path = dataset_path
-        self.files = self.load_paths()
+        self.split = split
+        self.files = self.load_paths(self.split)
+        
 
-    def load_paths(self):
-        paths = [os.path.join(dp, f) for dp, dn, fn in os.walk(os.path.expanduser(self.path)) for f in fn]
+    def load_paths(self, split):
+        sequences = []
+        for seq in os.listdir(self.path):
+            if split == 'training' and seq != '08':
+                sequences.append(os.path.join(self.path, seq))
+            elif split == 'validation' and seq == '08':
+                sequences.append(os.path.join(self.path, seq))
+
+        paths = [os.path.join(sequence, scans) for sequence in sequences for scans in os.listdir(sequence) ]
+        
         paths.sort()
         return np.array(paths)
 
@@ -24,7 +34,7 @@ class Segment_dataset():
         file = self.files[index]
         segment_data = json.load(open(file))
 
-        # Perfoem any data augmentation ?
+        # Perform any data augmentation ?
         return segment_data
 
 
