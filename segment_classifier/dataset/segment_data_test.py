@@ -1,4 +1,4 @@
-from Segment_dataset import Segment_dataset
+from segment_dataset import SegmentDataset
 import numpy as np
 import os
 import torch
@@ -7,7 +7,7 @@ import torch
 
 if __name__ == '__main__':
 
-    train_dataset = Segment_dataset('segment_dataset', 'training')
+    train_dataset = SegmentDataset('segment_dataset', 'training')
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=1,
