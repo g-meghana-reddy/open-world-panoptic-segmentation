@@ -18,4 +18,4 @@ test/
 **/build
 **/*.egg-info
 **/dist
-segment_classifier/
+segment_classifier/segment_dataset
