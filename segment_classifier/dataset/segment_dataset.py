@@ -3,7 +3,7 @@ import json
 import numpy as np
 
 
-class Segment_dataset():
+class SegmentDataset:
 
     def __init__(self, dataset_path, split= 'training'):
         self.path = dataset_path
