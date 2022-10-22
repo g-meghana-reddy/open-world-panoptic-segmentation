@@ -41,7 +41,7 @@ class Config:
     EPOCHS = 200
     BATCH_SIZE = 512
     N_POINTS = 1024
-    USE_WANDB = True
+    USE_WANDB = False
 
 
 def parse_args():
@@ -153,7 +153,7 @@ def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkp
                     if cfg.USE_WANDB:
                         wandb.log({
                             "loss/val": val_loss,
-                            "loss/acc": val_acc,
+                            "val/acc": val_acc,
                         }, step=it)
 
             pbar.close()
@@ -164,6 +164,8 @@ def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkp
 def validate(cfg, model, val_loader):
     model.eval()
     loss_func = F.binary_cross_entropy_with_logits
+    import pdb; pdb.set_trace()
+
     
     total_loss = 0.
     num_correct, num_total = 0, 0
@@ -191,6 +193,7 @@ def validate(cfg, model, val_loader):
 
         num_correct += (pred_label == cls_labels).sum()
         num_total += pts_input.shape[0]
+    import pdb; pdb.set_trace()
     acc = num_correct / num_total
     return loss.item(), acc.item()
 
