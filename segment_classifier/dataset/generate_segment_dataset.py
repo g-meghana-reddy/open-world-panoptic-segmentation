@@ -19,6 +19,7 @@ def parse_args():
     parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=-1)
     parser.add_argument("-p", "--prev_train_path", help="Directory to load checkpoint", default='4DPLS_original_params_original_repo_nframes1_1e-3')
     parser.add_argument("-i", "--chkp_idx", help="Index of checkpoint", type=int, default=None)
+    parser.add_argument("-g", "--gpu-id", help="GPU ID", type=int, default=0)
     args = parser.parse_args()
     return args
 
@@ -83,7 +84,7 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
     print('**********************************')
     print('Starting evaluation: Forward pass ')
     print('**********************************')
-    
+
     test_epoch = 0
 
     # Start test loop
@@ -285,16 +286,16 @@ if __name__ == '__main__':
     print('Initializing the environment ')
     print('*****************************')
 
+    # Get the command line arguments
+    args = parse_args()
+
     # Set which gpu is going to be used
-    GPU_ID = '4'
+    GPU_ID = str(args.gpu_id) # '4'
     # if torch.cuda.device_count() > 1:
     #     GPU_ID = '0, 1'
 
     # Set GPU visible device
     os.environ['CUDA_VISIBLE_DEVICES'] = GPU_ID
-
-    # Get the command line arguments
-    args = parse_args()
 
     #****************************************************
     # Step 2: Previous chkp
@@ -305,10 +306,12 @@ if __name__ == '__main__':
 
     # Choose index of checkpoint to start from. If None, uses the latest chkp
     previous_training_path = args.prev_train_path
+    # previous_training_path = "/project_data/ramanan/mganesin/4D-PLS/results"
     chkp_idx = args.chkp_idx
     if previous_training_path:
         # Find all snapshot in the chosen training folder
-        chkp_path = os.path.join('../','results', previous_training_path, 'checkpoints')
+        chkp_path = os.path.join("/project_data/ramanan/mganesin/4D-PLS/results", previous_training_path, "checkpoints")
+        # chkp_path = os.path.join('../../','results/checkpoints', previous_training_path, 'checkpoints')
         chkps = [f for f in os.listdir(chkp_path) if f[:4] == 'chkp']
 
         # Find which snapshot to restore
@@ -316,7 +319,7 @@ if __name__ == '__main__':
             chosen_chkp = 'current_chkp.tar'
         else:
             chosen_chkp = np.sort(chkps)[chkp_idx]
-        chosen_chkp = os.path.join('../','results', previous_training_path, 'checkpoints', chosen_chkp)
+        chosen_chkp = os.path.join(chkp_path, chosen_chkp)
     else:
         chosen_chkp = None
 
@@ -330,8 +333,9 @@ if __name__ == '__main__':
     # Initialize configuration class from checkpoint path
     config = SemanticKittiConfig()
     if previous_training_path:
-        config.load(os.path.join('../', 'results', previous_training_path))
-    
+        config.load(os.path.join('/project_data/ramanan/mganesin/4D-PLS/results', previous_training_path))
+        # config.load(os.path.join('../', 'results', previous_training_path))
+
     # Set the other configuration parameters to match the training config
     config.free_dim = 4
     config.n_frames = 1
@@ -355,27 +359,27 @@ if __name__ == '__main__':
     print('*********************************************')
 
     # Initialize datasets
-    training_dataset = SemanticKittiDataset(config, set='training',
-                                              balance_classes=False, datapath= '../data/SemanticKitti')
+    # training_dataset = SemanticKittiDataset(config, set='training',
+    #                                           balance_classes=False, datapath= '../data/SemanticKitti')
     test_dataset = SemanticKittiDataset(config, set='validation',
-                                        balance_classes=False, seqential_batch = True, datapath= '../data/SemanticKitti')
+                                        balance_classes=False, seqential_batch=True, datapath= '../data/SemanticKitti')
 
     # Initialize samplers
-    training_sampler = SemanticKittiSampler(training_dataset)
+    # training_sampler = SemanticKittiSampler(training_dataset)
     test_sampler = SemanticKittiSampler(test_dataset)
 
     # Initialize the dataloader
-    training_loader = DataLoader(training_dataset,
-                                 batch_size=1,
-                                 sampler=training_sampler,
-                                 collate_fn=SemanticKittiCollate,
-                                 num_workers=0,#config.input_threads,
-                                 pin_memory=True)
+    # training_loader = DataLoader(training_dataset,
+    #                              batch_size=1,
+    #                              sampler=training_sampler,
+    #                              collate_fn=SemanticKittiCollate,
+    #                              num_workers=config.input_threads,
+    #                              pin_memory=True)
     test_loader = DataLoader(test_dataset,
                              batch_size=1,
                              sampler=test_sampler,
                              collate_fn=SemanticKittiCollate,
-                             num_workers=0,#config.input_threads,
+                             num_workers=0, #config.input_threads,
                              pin_memory=True)
 
     #****************************************************
@@ -386,11 +390,11 @@ if __name__ == '__main__':
     print('********************')
 
     # Calibrate max_in_point value
-    training_sampler.calib_max_in(config, training_loader, verbose=True)
+    # training_sampler.calib_max_in(config, training_loader, verbose=True)
     test_sampler.calib_max_in(config, test_loader, verbose=True)
 
     # Calibrate samplers
-    training_sampler.calibration(training_loader, verbose=True)
+    # training_sampler.calibration(training_loader, verbose=True)
     test_sampler.calibration(test_loader, verbose=True)
 
     #****************************************************
@@ -414,8 +418,3 @@ if __name__ == '__main__':
 
     print('Forcing exit now')
     os.kill(os.getpid(), signal.SIGINT)
-
-
-
-
-
