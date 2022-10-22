@@ -2,8 +2,8 @@
 import torch
 import torch.nn as nn
 
-from pointnet2_modules import PointnetSAModule
-import pytorch_utils as pt_utils
+from model.pointnet2_modules import PointnetSAModule
+import model.pytorch_utils as pt_utils
 
 
 USE_BN = False
@@ -71,11 +71,10 @@ class PointNet2Classification(nn.Module):
             cls_layers.append(pt_utils.Conv1d(pre_channel, CLS_FC[k], bn=USE_BN))
             pre_channel = CLS_FC[k]
         cls_layers.append(pt_utils.Conv1d(pre_channel, cls_channel, activation=None))
-        if DP_RATIO >= 0:
+        if DP_RATIO > 0:
             cls_layers.insert(1, nn.Dropout(DP_RATIO))
         self.cls_layer = nn.Sequential(*cls_layers)
         self.init_weights(weight_init='xavier')
-
 
     def init_weights(self, weight_init='xavier'):
         if weight_init == 'kaiming':
