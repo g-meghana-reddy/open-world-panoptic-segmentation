@@ -14,7 +14,7 @@ class SegmentDataset:
         paths = []
         for seq in os.listdir(self.path):
             seq_dir = os.path.join(self.path, seq)
-            if not os.isdir(seq_dir):
+            if not os.path.isdir(seq_dir):
                 continue
             if self.split == 'training' and seq != '08':
                 paths.extend([
