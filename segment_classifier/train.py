@@ -7,8 +7,8 @@ import torch.nn as nn
 from torch import optim
 import torch.optim.lr_scheduler as lr_sched
 from torch.nn.utils import clip_grad_norm_
-from tensorboardX import SummaryWriter
 import tqdm
+import wandb
 
 from dataset.segment_dataset import SegmentDataset
 from model.pointnet2 import PointNet2Classification
@@ -41,11 +41,12 @@ class Config:
     EPOCHS = 200
     BATCH_SIZE = 512
     N_POINTS = 1024
+    USE_WANDB = True
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Arg parser")
-    parser.add_argument('-o', '--output-dir', type=str, default="results/")
+    parser.add_argument('--exp', type=str, default="xyz")
     parser.add_argument('--ckpt', type=str, default=None)
     parser.add_argument('-e', '--epochs', type=int, default=200)
     parser.add_argument('-b', '--batch_size', type=int, default=512)
@@ -108,7 +109,7 @@ def train_one_iter(cfg, model, batch, optimizer):
     return loss.item()
 
 
-def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkpoints/', ckpt_save_interval=5, eval_frequency=5, tb_log=None):
+def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkpoints/', ckpt_save_interval=5, eval_frequency=5):
     lr_scheduler, bnm_scheduler = create_scheduler(cfg, model, optimizer, -1)
     it = 0
     with tqdm.trange(0, cfg.EPOCHS, desc='epochs') as tbar, \
@@ -126,9 +127,11 @@ def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkp
                 tbar.set_postfix(dict(loss=loss))
                 tbar.refresh()
 
-                if tb_log is not None:
-                    tb_log.add_scalar('train_loss', loss, it)
-                    tb_log.add_scalar('learning_rate', cur_lr, it)
+                if cfg.USE_WANDB:
+                    wandb.log({
+                        "loss/train": loss,
+                        "lr": cur_lr
+                    }, step=it)
             
             lr_scheduler.step()
             bnm_scheduler.step(it)
@@ -147,10 +150,11 @@ def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkp
                 if val_loader is not None:
                     with torch.no_grad():
                         val_loss, val_acc = validate(cfg, model, val_loader)
-                    if tb_log is not None:
-                        tb_log.add_scalar('val_loss', val_loss, it)
-                        tb_log.add_scalar('val_acc', val_acc, it)
-            
+                    if cfg.USE_WANDB:
+                        wandb.log({
+                            "loss/val": val_loss,
+                            "loss/acc": val_acc,
+                        }, step=it)
 
             pbar.close()
             pbar = tqdm.tqdm(total=len(train_loader), leave=False, desc='train')
@@ -206,6 +210,10 @@ if __name__ == "__main__":
     else:
         feature_dims = 0
     
+    if cfg.USE_WANDB:
+        wandb.init("segment-classifier")
+        wandb.run.name = args.exp
+    
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = PointNet2Classification(input_channels=feature_dims, num_classes=1)
     if torch.cuda.device_count() > 1:
@@ -214,14 +222,11 @@ if __name__ == "__main__":
 
     optimizer = create_optimizer(cfg, model)
 
-    output_dir = args.output_dir
+    output_dir = os.path.join("results", args.exp)
     ckpt_dir = os.path.join(output_dir, "checkpoints")
-    log_dir = os.path.join(output_dir, "tensorboard")
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
         os.makedirs(ckpt_dir)
-        os.makedirs(log_dir)
-    tb_log = SummaryWriter(log_dir=log_dir)
 
     if args.ckpt is not None:
         pure_model = model.module if isinstance(model, torch.nn.DataParallel) else model
@@ -247,4 +252,4 @@ if __name__ == "__main__":
         collate_fn=valid_dataset.collate_batch
     )
     
-    train(cfg, model, optimizer, train_loader, val_loader=valid_loader, ckpt_dir=ckpt_dir, tb_log=tb_log)
+    train(cfg, model, optimizer, train_loader, val_loader=valid_loader, ckpt_dir=ckpt_dir)
