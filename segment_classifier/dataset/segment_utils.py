@@ -1,4 +1,3 @@
-import json
 import numpy as np
 from sklearn.cluster import DBSCAN
 
@@ -83,10 +82,10 @@ def segment_tree_traverse(segment_tree, pts_embeddings_objects, pts_velo_cs_obje
     '''Traversal of the hierarchical tree.'''
     if len(segment_tree.curr_segment_data.indices) == 0:
         return segment_index
-    
+
     if len(segment_tree.curr_segment_data.indices) > 50:
         if segment_tree.curr_segment_data.score < 0.2 or segment_tree.curr_segment_data.score >= 0.7 :
-            
+
             if tuple(segment_tree.curr_segment_data.indices.tolist()) not in visited_indices:
                 # print("----------------------------------------------")
                 # print("Segment indices: ", segment_tree.curr_segment_data.indices)
@@ -97,22 +96,28 @@ def segment_tree_traverse(segment_tree, pts_embeddings_objects, pts_velo_cs_obje
                 else:
                     gt_label = 1
 
-                filename = filepath + '_' + '{:07d}.json'.format(segment_index)
+                filename = filepath + '_' + '{:07d}.npz'.format(segment_index)
 
-                segment_data = {}
-                segment_data['name'] = filename.split('/')[-1][:-5]
-                segment_data['indices'] = segment_tree.curr_segment_data.indices.tolist()
-                segment_data['objectness_score'] = segment_tree.curr_segment_data.score
-                segment_data['xyz_features'] = pts_velo_cs_objects[segment_tree.curr_segment_data.indices].tolist()
-                segment_data['semantic_features'] = pts_embeddings_objects[segment_tree.curr_segment_data.indices].tolist()
-                segment_data['gt_label'] = gt_label
-                segment_data['semantic_label'] = int(np.bincount(gt_semantic_labels[segment_tree.curr_segment_data.indices].astype(int)).argmax())
+                name = filename.split('/')[-1][:-5]
+                indices = segment_tree.curr_segment_data.indices
+                objectness = segment_tree.curr_segment_data.score
+                xyz = pts_velo_cs_objects[segment_tree.curr_segment_data.indices]
+                semantic_features = pts_embeddings_objects[segment_tree.curr_segment_data.indices]
+                semantic_label = int(np.bincount(gt_semantic_labels[segment_tree.curr_segment_data.indices].astype(int)).argmax())
 
-                with open(filename, 'w') as outfile:
-                    json.dump(segment_data, outfile)
+                np.savez(
+                    filename,
+                    name=name,
+                    indices=indices,
+                    objectness=objectness,
+                    xyz=xyz,
+                    semantic_features=semantic_features,
+                    gt_label=gt_label,
+                    semantic_label=semantic_label,
+                )
 
                 segment_index += 1
-                visited_indices.add(tuple(segment_data['indices']))
+                visited_indices.add(tuple(indices.tolist()))
 
     for segment in segment_tree.child_segments:  
         segment_index = segment_tree_traverse(segment, pts_embeddings_objects, pts_velo_cs_objects, gt_semantic_labels, filepath, segment_index, visited_indices)
