@@ -132,7 +132,7 @@ def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkp
                         "loss/train": loss,
                         "lr": cur_lr
                     }, step=it)
-            
+
             lr_scheduler.step()
             bnm_scheduler.step(it)
 
@@ -164,8 +164,6 @@ def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkp
 def validate(cfg, model, val_loader):
     model.eval()
     loss_func = F.binary_cross_entropy_with_logits
-    import pdb; pdb.set_trace()
-
     
     total_loss = 0.
     num_correct, num_total = 0, 0
@@ -193,7 +191,6 @@ def validate(cfg, model, val_loader):
 
         num_correct += (pred_label == cls_labels).sum()
         num_total += pts_input.shape[0]
-    import pdb; pdb.set_trace()
     acc = num_correct / num_total
     return loss.item(), acc.item()
 
