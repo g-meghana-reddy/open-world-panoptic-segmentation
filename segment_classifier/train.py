@@ -1,12 +1,18 @@
 import argparse
 import os
 
+from sklearn.metrics import (
+    accuracy_score,
+    balanced_accuracy_score,
+    precision_recall_fscore_support
+)
 import torch
-import torch.nn.functional as F
-import torch.nn as nn
 from torch import optim
-import torch.optim.lr_scheduler as lr_sched
+import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
+import torch.optim.lr_scheduler as lr_sched
+from torch.utils.data import WeightedRandomSampler
 import tqdm
 import wandb
 
@@ -41,7 +47,7 @@ class Config:
     EPOCHS = 200
     BATCH_SIZE = 512
     N_POINTS = 1024
-    USE_WANDB = False
+    USE_WANDB = True
 
 
 def parse_args():
@@ -85,17 +91,17 @@ def create_scheduler(cfg, model, optimizer, last_epoch):
 
 def train_one_iter(cfg, model, batch, optimizer):
     model.train()
-
     loss_func = F.binary_cross_entropy_with_logits
+    
     optimizer.zero_grad()
-    xyz = torch.from_numpy(batch["xyz"]).cuda().float()
-    cls_labels = torch.from_numpy(batch["gt_label"]).cuda().float()
+    xyz = batch["xyz"].cuda().float()
+    cls_labels = batch["gt_label"].cuda().float()
 
     # TODO: use this later for segment refinement
-    # segm_label = torch.from_numpy(batch["semantic_label"]).cuda().long()
+    # segm_label = batch["semantic_label"].cuda().long()
 
     if cfg.USE_SEM_FEATURES:
-        features = torch.from_numpy(batch["semantic_features"]).cuda().float()
+        features = batch["semantic_features"].cuda().float()
         pts_input = torch.cat([xyz, features], dim=-1)
     else:
         pts_input = xyz
@@ -116,20 +122,20 @@ def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkp
                 tqdm.tqdm(total=len(train_loader), leave=False, desc='train') as pbar:
         for epoch in tbar:
             for idx, batch in enumerate(train_loader):
-                cur_lr = lr_scheduler.get_lr()[0]
-
+                cur_lr = lr_scheduler.get_last_lr()
                 loss = train_one_iter(cfg, model, batch, optimizer)
                 it += 1
 
-                # log to console and tensorboard
+                # log to console
                 pbar.update()
                 pbar.set_postfix(dict(total_it=it))
                 tbar.set_postfix(dict(loss=loss))
                 tbar.refresh()
 
+                # log to wandb
                 if cfg.USE_WANDB:
                     wandb.log({
-                        "loss/train": loss,
+                        "train/loss": loss,
                         "lr": cur_lr
                     }, step=it)
 
@@ -139,22 +145,18 @@ def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkp
             # save trained model
             trained_epoch = epoch + 1
             if trained_epoch % ckpt_save_interval == 0:
-                ckpt_name = os.path.join(ckpt_dir, 'checkpoint_epoch_%d' % trained_epoch)
+                ckpt_name = os.path.join(ckpt_dir, 'epoch_%d' % trained_epoch)
                 train_utils.save_checkpoint(
                     train_utils.checkpoint_state(model, optimizer, trained_epoch, it), filename=ckpt_name,
                 )
 
              # eval one epoch
-            if (epoch % eval_frequency) == 0:
+            if epoch % eval_frequency == 0 and val_loader is not None:
                 pbar.close()
-                if val_loader is not None:
-                    with torch.no_grad():
-                        val_loss, val_acc = validate(cfg, model, val_loader)
-                    if cfg.USE_WANDB:
-                        wandb.log({
-                            "loss/val": val_loss,
-                            "val/acc": val_acc,
-                        }, step=it)
+                with torch.no_grad():
+                    metric_dict = validate(cfg, model, val_loader)
+                if cfg.USE_WANDB:
+                    wandb.log(metric_dict, step=it)
 
             pbar.close()
             pbar = tqdm.tqdm(total=len(train_loader), leave=False, desc='train')
@@ -166,33 +168,44 @@ def validate(cfg, model, val_loader):
     loss_func = F.binary_cross_entropy_with_logits
     
     total_loss = 0.
-    num_correct, num_total = 0, 0
+    gt, pred = [], []
     for i, batch in tqdm.tqdm(enumerate(val_loader, 0), total=len(val_loader), leave=False, desc='val'):
         optimizer.zero_grad()
 
-        xyz = torch.from_numpy(batch["xyz"]).cuda().float()
-        cls_labels = torch.from_numpy(batch["gt_label"]).cuda().float()
+        xyz = batch["xyz"].cuda().float()
+        cls_labels = batch["gt_label"].cuda().float()
 
         # TODO: use this later for segment refinement
-        # segm_label = torch.from_numpy(batch["semantic_label"]).cuda().long()
+        # segm_label = batch["semantic_label"].cuda().long()
 
         if cfg.USE_SEM_FEATURES:
-            features = torch.from_numpy(batch["semantic_features"]).cuda().float()
+            features = batch["semantic_features"].cuda().float()
             pts_input = torch.cat([xyz, features], dim=-1)
         else:
             pts_input = xyz
 
         pred_cls = model(pts_input)
         pred_cls = pred_cls.view(-1)
-        pred_label = (pred_cls.sigmoid() >= cfg.FG_THRESH).long()
-
         loss = loss_func(pred_cls, cls_labels)
         total_loss += loss.item()
 
-        num_correct += (pred_label == cls_labels).sum()
-        num_total += pts_input.shape[0]
-    acc = num_correct / num_total
-    return loss.item(), acc.item()
+        pred_label = (pred_cls.sigmoid() >= cfg.FG_THRESH).long()
+        gt.extend(cls_labels.long().cpu().numpy())
+        pred.extend(pred_label.detach().cpu().numpy())
+
+    # compute validation metrics
+    acc = accuracy_score(gt, pred)
+    balanced_acc = balanced_accuracy_score(gt, pred)
+    prec, recall, f1, _ = precision_recall_fscore_support(gt, pred, average="binary")
+    metric_dict = {
+        "val/loss": total_loss,
+        "val/acc": acc,
+        "val/balanced_acc": balanced_acc,
+        "val/f1": f1,
+        "val/prec": prec,
+        "val/recall": recall,
+    }
+    return metric_dict
 
 
 if __name__ == "__main__":
@@ -233,22 +246,30 @@ if __name__ == "__main__":
         it, start_epoch = train_utils.load_checkpoint(pure_model, optimizer, filename=args.ckpt)
         last_epoch = start_epoch + 1
 
+    # create dataset
     train_dataset = SegmentDataset(data_dir, split='training', n_points=cfg.N_POINTS)
     valid_dataset = SegmentDataset(data_dir, split='validation', n_points=cfg.N_POINTS)
+
+    # create samplers
+    train_sampler = WeightedRandomSampler(train_dataset.weights, len(train_dataset), replacement=True)
+    valid_sampler = None
+
+    # create dataloader
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=cfg.BATCH_SIZE,
-        shuffle=True,
-        num_workers=8,
+        shuffle=(train_sampler is None),
+        num_workers=16,
         pin_memory=True,
+        sampler=train_sampler,
         collate_fn=train_dataset.collate_batch
     )
     valid_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=cfg.BATCH_SIZE,
-        shuffle=False,
-        num_workers=8,
+        num_workers=16,
         pin_memory=True,
+        sampler=valid_sampler,
         collate_fn=valid_dataset.collate_batch
     )
     
