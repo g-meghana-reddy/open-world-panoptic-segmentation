@@ -2,7 +2,7 @@ import argparse
 import signal
 import sys
 
-sys.path.append('../')
+sys.path.append('../..')
 
 from datasets.SemanticKitti import *
 from models.architectures import KPFCNN
@@ -69,7 +69,7 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
     # dataset saving path
     data_path = None
     if config.saving:
-        data_path = join('segment_dataset')
+        data_path = join('../segment_dataset')
         if not exists(data_path):
             makedirs(data_path)
     
@@ -201,7 +201,7 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
                 seq_name = test_loader.dataset.sequences[s_ind]
                 frame_name = test_loader.dataset.frames[s_ind][f_ind]
                 filepath = join(data_path, seq_name, frame_name)
-                scan_file = join('../data/SemanticKitti/sequences', seq_name, 'velodyne', frame_name+'.bin')
+                scan_file = join('../../data/SemanticKitti/sequences', seq_name, 'velodyne', frame_name+'.bin')
                 
                 # Construct the hierarchical tree per scan for all the thing class points and 
                 # compute scores per segment to generate the segment dataset
@@ -362,7 +362,7 @@ if __name__ == '__main__':
     # training_dataset = SemanticKittiDataset(config, set='training',
     #                                           balance_classes=False, datapath= '../data/SemanticKitti')
     test_dataset = SemanticKittiDataset(config, set='validation',
-                                        balance_classes=False, seqential_batch=True, datapath= '../data/SemanticKitti')
+                                        balance_classes=False, seqential_batch=True, datapath= '../../data/SemanticKitti')
 
     # Initialize samplers
     # training_sampler = SemanticKittiSampler(training_dataset)

@@ -83,8 +83,8 @@ def segment_tree_traverse(segment_tree, pts_embeddings_objects, pts_velo_cs_obje
     if len(segment_tree.curr_segment_data.indices) == 0:
         return segment_index
 
-    if len(segment_tree.curr_segment_data.indices) > 50:
-        if segment_tree.curr_segment_data.score < 0.2 or segment_tree.curr_segment_data.score >= 0.7 :
+    if len(segment_tree.curr_segment_data.indices) > 100:
+        if segment_tree.curr_segment_data.score < 0.2 or segment_tree.curr_segment_data.score >= 0.5 :
 
             if tuple(segment_tree.curr_segment_data.indices.tolist()) not in visited_indices:
                 # print("----------------------------------------------")
