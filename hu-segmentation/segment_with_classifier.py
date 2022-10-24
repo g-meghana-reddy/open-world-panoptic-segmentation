@@ -9,6 +9,7 @@ sys.path.append("segment_classifier/")
 import numpy as np
 from sklearn.cluster import DBSCAN
 import torch
+from tqdm import tqdm
 
 from segment_classifier.model.pointnet2 import PointNet2Classification
 from tree_utils import flatten_scores, flatten_indices
@@ -124,7 +125,7 @@ def parse_args():
     parser.add_argument("-s", "--sequence", help="Sequence", type=int, default=8)
     parser.add_argument("-o", "--objsem_folder", help="Folder with object and semantic predictions", type=str, required=True)
     parser.add_argument("-sd", "--save_dir", help="Save directory", type=str, default='test/LOSP')
-    parser.add_argument("--ckpt", help="Checkpoint to load for segment classifier", type=str, required=True)
+    parser.add_argument("--ckpt", help="Checkpoint to load for segment classifier", type=str, default=None)
     parser.add_argument("--use-sem-features", help="Whether to use semantic features in classifier", action="store_true")
     args = parser.parse_args()
     return args
@@ -144,8 +145,10 @@ if __name__ == '__main__':
 
     if args.use_sem_features:
         in_channels = 256
+        args.ckpt = "project_data/ramanan/achakrav/4D-PLS/hu-segmentation/segment_classifier/results/sem_xyz/checkpoints/epoch_200.pth"
     else:
         in_channels = 0
+        args.ckpt = "project_data/ramanan/achakrav/4D-PLS/hu-segmentation/segment_classifier/results/xyz/checkpoints/epoch_200.pth"
 
     # instantiate the segment classifier
     print("Loading segment classifier from checkpoint")
@@ -197,6 +200,7 @@ if __name__ == '__main__':
     sem_file_mask = []
     obj_file_mask = []
     ins_file_mask = []
+    emb_file_mask = []
     for idx, file in enumerate(objsem_files):
         if '_c.' in file:
             obj_file_mask.append(idx)
@@ -205,7 +209,11 @@ if __name__ == '__main__':
             frame_name = file.split('/')[-1]
             if len(frame_name.split('_')) < 4:
                 ins_file_mask.append(idx)
-        elif '_e.' not in file and '_u.' not in file and '_t.' not in file and '_pots.' not in file and '.ply' not in file and '_s.' not in file:
+        elif '_e' in file:
+            frame_name = file.split('/')[-1]
+            if len(frame_name.split('_')) < 4:
+                emb_file_mask.append(idx)
+        elif '_u.' not in file and '_t.' not in file and '_pots.' not in file and '.ply' not in file and '_s.' not in file:
             # Added for nframes=2
             frame_name = file.split('/')[-1]
             if len(frame_name.split('_')) < 3:
@@ -214,6 +222,7 @@ if __name__ == '__main__':
     objectness_files = objsem_files[obj_file_mask]
     semantic_files = objsem_files[sem_file_mask]
     instance_files = objsem_files[ins_file_mask]
+    embedding_files = objsem_files[emb_file_mask]
 
     assert (len(semantic_files) == len(objectness_files))
     assert (len(semantic_files) == len(scan_files))
@@ -241,7 +250,12 @@ if __name__ == '__main__':
         instance_file = instance_files[idx]
         instances = np.load(instance_file)
 
-        semantic_features = None
+        # semantic features / embeddings
+        if args.use_sem_features:
+            embedding_file = embedding_files[idx]
+            semantic_features = np.load(embedding_file)
+        else:
+            semantic_features = None
 
         if len(unk_labels) == 1:
             mask = np.where(labels == unk_labels[0])
