@@ -19,3 +19,5 @@ segment_classifier/segment_dataset
 **/build
 **/*.egg-info
 **/dist
+segment_classifier/segment_dataset
+hu-segmentation/segment_classifier/segment_dataset/*
