@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-
+NUM_THINGS = 8
 class SegmentDataset(Dataset):
     def __init__(self, dataset_path, split='training', n_points=1024):
         self.path = dataset_path
@@ -22,30 +22,35 @@ class SegmentDataset(Dataset):
         # compute weights for sampling during training
         self.paths = self.load_paths()
         if self.split == "training":
-            indices_file = os.path.join(dataset_path, "class_indices.npz")
+            indices_file = os.path.join('/project_data/ramanan/mganesin/4D-PLS/hu-segmentation/segment_classifier', "class_indices.npz")
             if os.path.exists(indices_file):
                 print("Loading precomputed indices")
                 indices = dict(np.load(indices_file))
                 pos_indices, neg_indices = indices["pos_indices"], indices["neg_indices"]
+                sem_class_counts = indices["sem_class_counts"]
             else:
                 print("Precomputing indices, one-time only!")
                 pos_indices, neg_indices = [], []
+                sem_class_counts = np.zeros((NUM_THINGS, 1))
                 for idx, path in enumerate(self.paths):
                     segment_data = dict(np.load(path))
                     if segment_data["gt_label"] == 1:
                         pos_indices.append(idx)
                     else:
                         neg_indices.append(idx)
+                    sem_class_counts[segment_data["semantic_label"]-1] += 1 
                 np.savez(
                     indices_file,
                     pos_indices=pos_indices,
-                    neg_indices=neg_indices
+                    neg_indices=neg_indices,
+                    sem_class_counts=sem_class_counts
                 )
 
             num_segments = len(self.paths)
             self.weights = torch.zeros(num_segments)
             self.weights[pos_indices] = num_segments / len(pos_indices)
             self.weights[neg_indices] = num_segments / len(neg_indices)
+            self.sem_weights = np.divide(sem_class_counts.sum(), sem_class_counts, out=np.zeros_like(sem_class_counts), where=sem_class_counts!=0)
 
     def load_paths(self):
         paths = []

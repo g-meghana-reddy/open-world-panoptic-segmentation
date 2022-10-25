@@ -30,7 +30,10 @@ class Config:
 
     # Model config
     USE_SEM_FEATURES = False
-    USE_SEM_REFINEMENT = False
+    USE_SEG_OBJECTNESS = False
+    USE_SEM_REFINEMENT = True
+
+    NUM_THINGS = 8
 
     # Optimizer parameters
     WEIGHT_DECAY = 0.0
@@ -52,11 +55,12 @@ class Config:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Arg parser")
-    parser.add_argument('--exp', type=str, default="xyz")
+    parser.add_argument('--exp', type=str, default="xyz_sem_weighted")
     parser.add_argument('--ckpt', type=str, default=None)
     parser.add_argument('-e', '--epochs', type=int, default=200)
     parser.add_argument('-b', '--batch_size', type=int, default=512)
     parser.add_argument('--use-sem-features', action="store_true")
+    parser.add_argument('--weighted_sem', action="store_true")
     return parser.parse_args()
 
 # __C.TRAIN.MOMS = [0.95, 0.85]
@@ -89,16 +93,11 @@ def create_scheduler(cfg, model, optimizer, last_epoch):
     return lr_scheduler, bnm_scheduler
 
 
-def train_one_iter(cfg, model, batch, optimizer):
+def train_one_iter(cfg, model, batch, optimizer, sem_weights):
     model.train()
-    loss_func = F.binary_cross_entropy_with_logits
     
     optimizer.zero_grad()
     xyz = batch["xyz"].cuda().float()
-    cls_labels = batch["gt_label"].cuda().float()
-
-    # TODO: use this later for segment refinement
-    # segm_label = batch["semantic_label"].cuda().long()
 
     if cfg.USE_SEM_FEATURES:
         features = batch["semantic_features"].cuda().float()
@@ -106,16 +105,40 @@ def train_one_iter(cfg, model, batch, optimizer):
     else:
         pts_input = xyz
 
-    pred_cls = model(pts_input)
-    pred_cls = pred_cls.view(-1)
-    loss = loss_func(pred_cls, cls_labels)
+    pred_cls, pred_sem = model(pts_input)
+    if pred_cls is not None:
+        pred_cls = pred_cls.view(-1)
+
+    loss = compute_loss(cfg, pred_cls, pred_sem, batch, sem_weights)
     loss.backward()
     clip_grad_norm_(model.parameters(), cfg.GRAD_NORM_CLIP)
     optimizer.step()
     return loss.item()
 
+def compute_loss(cfg, pred_obj_cls, pred_sem_cls, batch, sem_weights, training= True):
 
-def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkpoints/', ckpt_save_interval=5, eval_frequency=5):
+    obj_loss = 0
+    sem_loss = 0
+
+    if cfg.USE_SEG_OBJECTNESS:
+        cls_labels = batch["gt_label"].cuda().float()
+        obj_loss_func = F.binary_cross_entropy_with_logits
+        obj_loss = obj_loss_func(pred_obj_cls, cls_labels)
+
+    if cfg.USE_SEM_REFINEMENT:
+        segment_label = batch["semantic_label"].cuda().long() - 1
+        sem_loss_func = F.cross_entropy
+
+        # backpropagate only for valid segments
+        if training:
+            inds = torch.where(batch['gt_label'] == 1)
+            pred_sem_cls = pred_sem_cls[inds] 
+            segment_label = segment_label[inds]
+        sem_loss = sem_loss_func(pred_sem_cls, segment_label, weight = sem_weights)
+
+    return obj_loss + sem_loss
+
+def train(cfg, model, optimizer, train_loader, sem_weights, val_loader=None, ckpt_dir='checkpoints/', ckpt_save_interval=5, eval_frequency=5):
     lr_scheduler, bnm_scheduler = create_scheduler(cfg, model, optimizer, -1)
     it = 0
     with tqdm.trange(0, cfg.EPOCHS, desc='epochs') as tbar, \
@@ -123,7 +146,7 @@ def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkp
         for epoch in tbar:
             for idx, batch in enumerate(train_loader):
                 cur_lr = lr_scheduler.get_last_lr()
-                loss = train_one_iter(cfg, model, batch, optimizer)
+                loss = train_one_iter(cfg, model, batch, optimizer, sem_weights)
                 it += 1
 
                 # log to console
@@ -154,7 +177,7 @@ def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkp
             if epoch % eval_frequency == 0 and val_loader is not None:
                 pbar.close()
                 with torch.no_grad():
-                    metric_dict = validate(cfg, model, val_loader)
+                    metric_dict = validate(cfg, model, val_loader, sem_weights)
                 if cfg.USE_WANDB:
                     wandb.log(metric_dict, step=it)
 
@@ -163,12 +186,11 @@ def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkp
             pbar.set_postfix(dict(total_it=it))
 
 
-def validate(cfg, model, val_loader):
+def validate(cfg, model, val_loader, sem_weights):
     model.eval()
-    loss_func = F.binary_cross_entropy_with_logits
     
     total_loss = 0.
-    gt, pred = [], []
+    obj_gt, obj_pred, sem_gt, sem_pred = [], [], [], []
     for i, batch in tqdm.tqdm(enumerate(val_loader, 0), total=len(val_loader), leave=False, desc='val'):
         optimizer.zero_grad()
 
@@ -176,7 +198,7 @@ def validate(cfg, model, val_loader):
         cls_labels = batch["gt_label"].cuda().float()
 
         # TODO: use this later for segment refinement
-        # segm_label = batch["semantic_label"].cuda().long()
+        sem_label = batch["semantic_label"].cuda().long() - 1
 
         if cfg.USE_SEM_FEATURES:
             features = batch["semantic_features"].cuda().float()
@@ -184,33 +206,55 @@ def validate(cfg, model, val_loader):
         else:
             pts_input = xyz
 
-        pred_cls = model(pts_input)
-        pred_cls = pred_cls.view(-1)
-        loss = loss_func(pred_cls, cls_labels)
+        pred_cls, pred_sem = model(pts_input)
+        if pred_cls is not None:
+            pred_cls = pred_cls.view(-1)
+        loss = compute_loss(cfg, pred_cls, pred_sem, batch, sem_weights, training= False)
         total_loss += loss.item()
 
-        pred_label = (pred_cls.sigmoid() >= cfg.FG_THRESH).long()
-        gt.extend(cls_labels.long().cpu().numpy())
-        pred.extend(pred_label.detach().cpu().numpy())
+        if cfg.USE_SEG_OBJECTNESS:
+            obj_pred_label = (pred_cls.sigmoid() >= cfg.FG_THRESH).long()
+            obj_gt.extend(cls_labels.long().cpu().numpy())
+            obj_pred.extend(obj_pred_label.detach().cpu().numpy())
+
+
+        if cfg.USE_SEM_REFINEMENT:
+            sem_pred_label = torch.argmax(pred_sem, axis = -1).long()
+            sem_gt.extend(sem_label.long().cpu().numpy())
+            sem_pred.extend(sem_pred_label.detach().cpu().numpy())
+
 
     # compute validation metrics
-    acc = accuracy_score(gt, pred)
-    balanced_acc = balanced_accuracy_score(gt, pred)
-    prec, recall, f1, _ = precision_recall_fscore_support(gt, pred, average="binary")
-    metric_dict = {
-        "val/loss": total_loss,
-        "val/acc": acc,
-        "val/balanced_acc": balanced_acc,
-        "val/f1": f1,
-        "val/prec": prec,
-        "val/recall": recall,
-    }
+    metric_dict = {'val/loss': total_loss}
+    if cfg.USE_SEG_OBJECTNESS:
+        add_metrics(metric_dict, obj_gt, obj_pred, "objectness")
+
+    if cfg.USE_SEM_REFINEMENT:
+        add_metrics(metric_dict, sem_gt, sem_pred, "semantics")
+    
     return metric_dict
 
+def add_metrics(metric_dict, gt, pred, name):
+
+    acc = accuracy_score(gt, pred)
+    balanced_acc = balanced_accuracy_score(gt, pred)
+    if name == 'objectness':
+        avg = 'binary'
+    else:
+        avg = 'weighted'
+
+    prec, recall, f1, _ = precision_recall_fscore_support(gt, pred, average=avg)
+    
+    name = 'val/{}_'.format(name)
+    
+    keys = [ name + 'acc', name + 'balanced_acc', name + 'f1', name + 'prec', name + 'recall']
+    values = [acc, balanced_acc, f1.item(), prec.item(), recall.item()]
+    metric_dict.update(zip(keys, values))
+        
 
 if __name__ == "__main__":
     args = parse_args()
-    data_dir = "/project_data/ramanan/achakrav/4D-PLS/segment_classifier/segment_dataset/"
+    data_dir = "/project_data/ramanan/achakrav/4D-PLS/data/segment_dataset"
 
     # load training config
     cfg = Config()
@@ -228,7 +272,7 @@ if __name__ == "__main__":
         wandb.run.name = args.exp
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = PointNet2Classification(input_channels=feature_dims, num_classes=1)
+    model = PointNet2Classification(cfg, input_channels=feature_dims, num_classes=1)
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
     model.to(device)
@@ -249,6 +293,13 @@ if __name__ == "__main__":
     # create dataset
     train_dataset = SegmentDataset(data_dir, split='training', n_points=cfg.N_POINTS)
     valid_dataset = SegmentDataset(data_dir, split='validation', n_points=cfg.N_POINTS)
+
+    if args.weighted_sem:
+        sem_weights = torch.from_numpy(train_dataset.sem_weights).cuda().float()
+    else:
+        sem_weights = torch.ones((8,)).cuda().float()
+    
+    print(sem_weights)
 
     # create samplers
     train_sampler = WeightedRandomSampler(train_dataset.weights, len(train_dataset), replacement=True)
@@ -273,4 +324,4 @@ if __name__ == "__main__":
         collate_fn=valid_dataset.collate_batch
     )
     
-    train(cfg, model, optimizer, train_loader, val_loader=valid_loader, ckpt_dir=ckpt_dir)
+    train(cfg, model, optimizer, train_loader, sem_weights, val_loader=valid_loader, ckpt_dir=ckpt_dir)

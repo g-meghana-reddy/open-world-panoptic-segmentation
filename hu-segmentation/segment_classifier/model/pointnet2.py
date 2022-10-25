@@ -4,6 +4,7 @@ import torch.nn as nn
 
 from model.pointnet2_modules import PointnetSAModule
 import model.pytorch_utils as pt_utils
+import torch.nn.functional as F
 
 
 USE_BN = False
@@ -34,7 +35,7 @@ class PointNet2Classification(nn.Module):
     NOTE: Batch size cannot be 1 for this network since we use BN: https://discuss.pytorch.org/t/error-expected-more-than-1-value-per-channel-when-training/26274/2
     PointRCNN does not use BN so it's all good
     """
-    def __init__(self, input_channels=3, num_classes=1):
+    def __init__(self, cfg, input_channels=3, num_classes=1):
         super(PointNet2Classification, self).__init__()
 
         self.SA_modules = nn.ModuleList()
@@ -46,6 +47,9 @@ class PointNet2Classification(nn.Module):
                                                 bn=USE_BN)
         # c_out = XYZ_UP_LAYER[-1]
         # self.merge_down_layer = pt_utils.SharedMLP([c_out * 2, c_out], bn=USE_BN)
+
+        # flags for segment_objectness head and semantic refinement head
+        self.config = cfg
 
         # encode features
         for k in range(len(NPOINTS)):
@@ -64,7 +68,17 @@ class PointNet2Classification(nn.Module):
             )
             channel_in = mlps[-1]
 
-        cls_channel = 1 if num_classes == 2 else num_classes
+        if cfg.USE_SEG_OBJECTNESS:
+            cls_channel = 1 if num_classes == 2 else num_classes
+            self.obj_layer = self.declare_attribute_heads(channel_in, cls_channel)
+        
+        if cfg.USE_SEM_REFINEMENT:
+            cls_channel = cfg.NUM_THINGS
+            self.sem_layer = self.declare_attribute_heads(channel_in, cls_channel)
+        
+        self.init_weights(weight_init='xavier')
+
+    def declare_attribute_heads(self, channel_in, cls_channel):
         cls_layers = []
         pre_channel = channel_in
         for k in range(len(CLS_FC)):
@@ -73,8 +87,7 @@ class PointNet2Classification(nn.Module):
         cls_layers.append(pt_utils.Conv1d(pre_channel, cls_channel, activation=None))
         if DP_RATIO > 0:
             cls_layers.insert(1, nn.Dropout(DP_RATIO))
-        self.cls_layer = nn.Sequential(*cls_layers)
-        self.init_weights(weight_init='xavier')
+        return nn.Sequential(*cls_layers)
 
     def init_weights(self, weight_init='xavier'):
         if weight_init == 'kaiming':
@@ -103,6 +116,24 @@ class PointNet2Classification(nn.Module):
         features = pc[..., 3:].transpose(1, 2).contiguous() if pc.size(-1) > 3 else None
 
         return xyz, features
+
+    # def loss(self, pred_obj_cls, pred_sem_cls, batch, sem_weights):
+
+    #     obj_loss = 0
+    #     sem_loss = 0
+
+    #     if cfg.USE_SEG_OBJECTNESS:
+    #         cls_labels = batch["gt_label"].cuda().float()
+    #         obj_loss_func = F.binary_cross_entropy_with_logits
+    #         obj_loss = obj_loss_func(pred_obj_cls, cls_labels)
+
+    #     if cfg.USE_SEM_REFINEMENT:
+    #         segment_label = batch["semantic_label"].cuda().long()
+    #         sem_loss_func = F.cross_entropy
+    #         sem_loss = sem_loss_func(pred_sem_cls, segment_label, weight = sem_weights)
+
+    #     return obj_loss + sem_loss
+        
     
     def forward(self, pointcloud: torch.cuda.FloatTensor):
         """
@@ -129,12 +160,28 @@ class PointNet2Classification(nn.Module):
 
         for module in self.SA_modules:
             xyz, features = module(xyz, features)
-        
-        return self.cls_layer(features).transpose(1, 2).contiguous().squeeze(dim=1)  # (B, 1 or 2)
+
+        objectness = None
+        semantics = None
+
+        if self.config.USE_SEG_OBJECTNESS:
+            objectness = self.obj_layer(features).transpose(1, 2).contiguous().squeeze(dim=1)  # (B, 1 or 2)
+
+        if self.config.USE_SEM_REFINEMENT:
+            semantics = self.sem_layer(features).transpose(1, 2).contiguous().squeeze(dim=1)  # (B, 1 or 2)
+
+        return objectness, semantics
     
+class Config:
+    # Model config
+    USE_SEM_FEATURES = False
+    USE_SEG_OBJECTNESS = True
+    USE_SEM_REFINEMENT = False
+
 
 if __name__ == "__main__":
     point_cloud = torch.rand(1, 4096, 6).cuda()
-    model = PointNet2Classification(input_channels=3).cuda()
+    cfg = Config()
+    model = PointNet2Classification(cfg, input_channels=3).cuda()
     output = model(point_cloud)
     print(output.shape)
