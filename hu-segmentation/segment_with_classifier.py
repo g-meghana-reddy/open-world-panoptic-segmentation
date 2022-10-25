@@ -147,10 +147,10 @@ if __name__ == '__main__':
 
     if args.use_sem_features:
         in_channels = 256
-        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/hu-segmentation/segment_classifier/results/sem_xyz/checkpoints/epoch_200.pth"
+        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/sem_xyz/checkpoints/epoch_200.pth"
     else:
         in_channels = 0
-        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/hu-segmentation/segment_classifier/results/xyz/checkpoints/epoch_200.pth"
+        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz/checkpoints/epoch_200.pth"
 
     # instantiate the segment classifier
     print("Loading segment classifier from checkpoint")
