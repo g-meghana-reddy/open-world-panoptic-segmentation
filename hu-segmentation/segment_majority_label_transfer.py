@@ -258,7 +258,6 @@ if __name__ == '__main__':
         flat_scores = flatten_scores(scores)
 
         new_instance = instances.max() + 1
-        
         for id, indices in enumerate(mapped_indices):
             # if flat_scores[idx] < 0.1:
             #     instances[indices] = 0

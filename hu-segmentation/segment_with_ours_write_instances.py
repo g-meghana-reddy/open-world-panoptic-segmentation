@@ -8,8 +8,9 @@ import os
 from tree_utils import flatten_scores, flatten_indices
 import sys
 from utils import *
-import open3d as o3d
+# import open3d as o3d
 import glob
+import yaml
 
 import pdb
 
@@ -108,6 +109,7 @@ def parse_args():
     parser.add_argument("-d", "--dataset", help="Dataset", default='semantic-kitti')
     parser.add_argument("-s", "--sequence", help="Sequence", type=int, default=8)
     parser.add_argument("-o", "--objsem_folder", help="Folder with object and semantic predictions", type=str, required=True)
+    parser.add_argument("-sd", "--save_dir", help="Directory to save outputs", type=str)
     args = parser.parse_args()
     return args
 
@@ -128,6 +130,28 @@ if __name__ == '__main__':
         seq = '{:02d}'.format(args.sequence)
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/velodyne/'
         scan_files = load_paths(scan_folder)
+
+        if args.task_set == -1:
+            config = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti-orig.yaml"
+        elif args.task_set == 1:
+            config = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti.yaml"
+        with open(config, 'r') as stream:
+            doc = yaml.safe_load(stream)
+            all_labels = doc['labels']
+            if args.task_set == -1:
+                learning_map_inv = doc['learning_map_inv']
+                learning_map_doc = doc['learning_map']
+            else:
+                learning_map_inv = doc['task_set_map'][args.task_set]['learning_map_inv']
+                learning_map_doc = doc['task_set_map'][args.task_set]['learning_map']
+            learning_map = np.zeros((np.max([k for k in learning_map_doc.keys()]) + 1), dtype=np.int32)
+            for k, v in learning_map_doc.items():
+                learning_map[k] = v
+
+            inv_learning_map = np.zeros((np.max([k for k in learning_map_inv.keys()]) + 1), 
+                                dtype=np.int32)
+            for k, v in learning_map_inv.items():
+                inv_learning_map[k] = v
 
     elif args.dataset == 'kitti-raw':
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti-Raw/2011_09_26/'
@@ -171,6 +195,12 @@ if __name__ == '__main__':
     assert (len(semantic_files) == len(scan_files))
 
     for idx in tqdm(range(len(objectness_files))):
+        segmented_dir = '{}/sequences/{:02d}/predictions/'.format(
+            args.save_dir, args.sequence)
+        if not os.path.exists(segmented_dir):
+            os.makedirs(segmented_dir)
+        segmented_file = os.path.join(segmented_dir, '{:07d}.label'.format(idx))
+
         # load scan
         scan_file = scan_files[idx]
         pts_velo_cs = load_vertex(scan_file)
@@ -188,7 +218,7 @@ if __name__ == '__main__':
         instance_file = instance_files[idx]
         instances = np.load(instance_file)
         parent_dir, ins_base = os.path.split(instance_file)
-        segmented_file = os.path.join(parent_dir, ins_base.replace('_i', '_u'))
+        # segmented_file = os.path.join(parent_dir, ins_base.replace('_i', '_u'))
 
         for unk_label in unk_labels:
             mask = labels == unk_label
@@ -220,11 +250,17 @@ if __name__ == '__main__':
             # mapped_flat_indices = pts_indexes_objects
             flat_scores = flatten_scores(scores)
 
-            # save results
-            # np.savez_compressed(os.path.join(write_dir, seq + '_'+str(idx).zfill(6)),
-            #                     instances=mapped_indices, segment_scores=flat_scores, allow_pickle = True)
-
             new_instance = instances.max() + 1
-            for idx, indices in enumerate(mapped_indices):
-                instances[indices] = new_instance + idx
-        np.save(segmented_file, instances)
+            for id_, indices in enumerate(mapped_indices):
+                instances[indices] = new_instance + id_
+                # majority semantic label in the segment is the new assignment
+                labels[indices] = np.bincount(labels[indices])[:max(unk_labels)].argmax()
+        # np.save(segmented_file, instances)
+
+        # Create .label files using the updated instance and semantic labels
+        sem_labels = labels.astype(np.int32)
+        inv_sem_labels = inv_learning_map[sem_labels]
+        instances = np.left_shift(instances.astype(np.int32), 16)
+        new_preds = np.bitwise_or(instances, inv_sem_labels)
+
+        new_preds.tofile(segmented_file)

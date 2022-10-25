@@ -8,7 +8,7 @@ import os
 from tree_utils import flatten_scores, flatten_indices
 import sys
 from utils import *
-import open3d as o3d
+# import open3d as o3d
 import glob
 import yaml
 
@@ -189,8 +189,8 @@ if __name__ == '__main__':
     instance_files = objsem_files[ins_file_mask]
     softmax_files = objsem_files[softmax_file_mask]
 
-    # assert (len(semantic_files) == len(objectness_files))
-    # assert (len(semantic_files) == len(scan_files))
+    assert (len(semantic_files) == len(objectness_files))
+    assert (len(semantic_files) == len(scan_files))
 
     for idx in tqdm(range(len(objectness_files))):
         
@@ -257,12 +257,7 @@ if __name__ == '__main__':
         # mapped_flat_indices = pts_indexes_objects
         flat_scores = flatten_scores(scores)
 
-        # save results
-        # np.savez_compressed(os.path.join(write_dir, seq + '_'+str(idx).zfill(6)),
-        #                     instances=mapped_indices, segment_scores=flat_scores, allow_pickle = True)
-
         new_instance = instances.max() + 1
-        
         for id, indices in enumerate(mapped_indices):
             # if flat_scores[idx] < 0.1:
             #     instances[indices] = 0
@@ -325,9 +320,9 @@ if __name__ == '__main__':
             # with GT instance labels
             unmatched_ins = unique_pred[unmatched_pred_idx]
             unmatched_mask = instance_pred_obj == unmatched_ins
+
             # Ignore the rejected segments by assigning to unlabeled class
-            instances[unmatched_mask] = 0.
-            labels[unmatched_mask] = 0.
+            instances[unmatched_mask] = 9999
 
         for (matched_pred_idx, matched_gt_idx) in zip(matched_pred_idxs, matched_gt_idxs):
             # find semantic label for transfer
@@ -343,7 +338,7 @@ if __name__ == '__main__':
             # softmax mean
             sem_label_probs = softmax_scores_pred[instance_pred_obj == pred_ins][:, :8]
             sem_label = np.mean(sem_label_probs, axis = 0) * np.bincount(sem_label_pred, minlength=9)[1:]
-            sem_label = sem_label.argmax()  + 1
+            sem_label = sem_label.argmax() + 1
             
             # majority count
             # sem_label_major = np.bincount(sem_label_pred).argmax()
