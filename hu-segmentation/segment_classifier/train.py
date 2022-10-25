@@ -210,7 +210,7 @@ def validate(cfg, model, val_loader):
 
 if __name__ == "__main__":
     args = parse_args()
-    data_dir = "/project_data/ramanan/achakrav/4D-PLS/segment_classifier/segment_dataset/"
+    data_dir = "/project_data/ramanan/achakrav/4D-PLS/data/segment_dataset/"
 
     # load training config
     cfg = Config()
@@ -235,7 +235,7 @@ if __name__ == "__main__":
 
     optimizer = create_optimizer(cfg, model)
 
-    output_dir = os.path.join("results", args.exp)
+    output_dir = os.path.join("../../results/checkpoints", args.exp)
     ckpt_dir = os.path.join(output_dir, "checkpoints")
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
