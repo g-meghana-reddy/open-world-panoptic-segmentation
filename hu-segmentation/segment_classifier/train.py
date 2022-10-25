@@ -30,7 +30,7 @@ class Config:
 
     # Model config
     USE_SEM_FEATURES = False
-    USE_SEG_OBJECTNESS = False
+    USE_SEG_OBJECTNESS = True
     USE_SEM_REFINEMENT = True
 
     NUM_THINGS = 8
@@ -55,7 +55,7 @@ class Config:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Arg parser")
-    parser.add_argument('--exp', type=str, default="xyz_sem_weighted")
+    parser.add_argument('--exp', type=str, default="sem_obj_weighted")
     parser.add_argument('--ckpt', type=str, default=None)
     parser.add_argument('-e', '--epochs', type=int, default=200)
     parser.add_argument('-b', '--batch_size', type=int, default=512)
@@ -134,6 +134,13 @@ def compute_loss(cfg, pred_obj_cls, pred_sem_cls, batch, sem_weights, training= 
             inds = torch.where(batch['gt_label'] == 1)
             pred_sem_cls = pred_sem_cls[inds] 
             segment_label = segment_label[inds]
+        else:
+            if cfg.USE_SEG_OBJECTNESS:
+                inds = torch.where(pred_obj_cls.sigmoid() >= cfg.FG_THRESH)
+                pred_sem_cls = pred_sem_cls[inds] 
+                segment_label = segment_label[inds]
+
+
         sem_loss = sem_loss_func(pred_sem_cls, segment_label, weight = sem_weights)
 
     return obj_loss + sem_loss
