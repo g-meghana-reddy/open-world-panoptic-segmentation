@@ -7,7 +7,7 @@ from segment_dataset import SegmentDataset
 
 
 if __name__ == '__main__':
-    data_dir = "/project_data/ramanan/achakrav/4D-PLS/segment_classifier/segment_dataset"
+    data_dir = "/project_data/ramanan/achakrav/4D-PLS/data/segment_dataset/"
 
     train_dataset = SegmentDataset(data_dir, split='training')
     batch_size = 512
