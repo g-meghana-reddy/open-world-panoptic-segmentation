@@ -32,6 +32,8 @@ def evaluate(model, points, features=None):
         if num_points_in_segment < NUM_POINTS:
             residual = NUM_POINTS - num_points_in_segment
             points = np.concatenate([points, np.zeros((residual, points.shape[1]))])
+            if features is not None:
+                features = np.concatenate([features, np.zeros((residual, features.shape[1]))])
         chosen_idxs = np.arange(0, NUM_POINTS, dtype=np.int32)
     np.random.shuffle(chosen_idxs)
 
@@ -145,10 +147,10 @@ if __name__ == '__main__':
 
     if args.use_sem_features:
         in_channels = 256
-        args.ckpt = "project_data/ramanan/achakrav/4D-PLS/hu-segmentation/segment_classifier/results/sem_xyz/checkpoints/epoch_200.pth"
+        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/hu-segmentation/segment_classifier/results/sem_xyz/checkpoints/epoch_200.pth"
     else:
         in_channels = 0
-        args.ckpt = "project_data/ramanan/achakrav/4D-PLS/hu-segmentation/segment_classifier/results/xyz/checkpoints/epoch_200.pth"
+        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/hu-segmentation/segment_classifier/results/xyz/checkpoints/epoch_200.pth"
 
     # instantiate the segment classifier
     print("Loading segment classifier from checkpoint")
@@ -294,8 +296,8 @@ if __name__ == '__main__':
         # flat_scores = flatten_scores(scores)
 
         new_instance = instances.max() + 1
-        for idx, indices in enumerate(mapped_indices):
-            instances[indices] = new_instance + idx
+        for id_, indices in enumerate(mapped_indices):
+            instances[indices] = new_instance + id_
 
         # Create .label files using the updated instance and semantic labels
         sem_labels = labels.astype(np.int32)
