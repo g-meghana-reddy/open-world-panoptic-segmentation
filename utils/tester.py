@@ -397,7 +397,7 @@ class ModelTester:
         test_path = None
         report_path = None
         if config.saving:
-            test_path = join('test', config.saving_path.split('/')[-1])
+            test_path = join('results', 'validation', config.saving_path.split('/')[-1])
             if not exists(test_path):
                 makedirs(test_path)
             report_path = join(test_path, 'reports')
@@ -793,7 +793,7 @@ class ModelTester:
 
 
         if config.saving:
-            test_path = join('test', config.saving_path.split('/')[-1])
+            test_path = join('results', 'validation', config.saving_path.split('/')[-1])
             if not exists(test_path):
                 makedirs(test_path)
             report_path = join(test_path, 'reports')
@@ -1208,27 +1208,3 @@ class ModelTester:
                 break
 
         return
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
