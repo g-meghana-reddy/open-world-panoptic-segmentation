@@ -1,6 +1,7 @@
 # Adapted from: https://github.com/sshaoshuai/PointRCNN
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from model.pointnet2_modules import PointnetSAModule
 import model.pytorch_utils as pt_utils
@@ -34,8 +35,11 @@ class PointNet2Classification(nn.Module):
     NOTE: Batch size cannot be 1 for this network since we use BN: https://discuss.pytorch.org/t/error-expected-more-than-1-value-per-channel-when-training/26274/2
     PointRCNN does not use BN so it's all good
     """
-    def __init__(self, input_channels=3, num_classes=1):
+    def __init__(self, cfg, input_channels=3, num_classes=1):
         super(PointNet2Classification, self).__init__()
+
+        # flags for segment_objectness head and semantic refinement head
+        self.config = cfg
 
         self.SA_modules = nn.ModuleList()
         channel_in = input_channels
@@ -64,17 +68,26 @@ class PointNet2Classification(nn.Module):
             )
             channel_in = mlps[-1]
 
-        cls_channel = 1 if num_classes == 2 else num_classes
+        if cfg.USE_SEG_CLASSIFIER:
+            cls_channel = 1 if num_classes == 2 else num_classes
+            self.cls_layer = self._create_head(channel_in, cls_channel)
+
+        if cfg.USE_SEM_REFINEMENT:
+            cls_channel = cfg.NUM_THINGS
+            self.sem_layer = self._create_head(channel_in, cls_channel)
+
+        self.init_weights(weight_init='xavier')
+    
+    def _create_head(self, in_channels, cls_channels):
         cls_layers = []
-        pre_channel = channel_in
+        pre_channel = in_channels
         for k in range(len(CLS_FC)):
             cls_layers.append(pt_utils.Conv1d(pre_channel, CLS_FC[k], bn=USE_BN))
             pre_channel = CLS_FC[k]
-        cls_layers.append(pt_utils.Conv1d(pre_channel, cls_channel, activation=None))
+        cls_layers.append(pt_utils.Conv1d(pre_channel, cls_channels, activation=None))
         if DP_RATIO > 0:
             cls_layers.insert(1, nn.Dropout(DP_RATIO))
-        self.cls_layer = nn.Sequential(*cls_layers)
-        self.init_weights(weight_init='xavier')
+        return nn.Sequential(*cls_layers)
 
     def init_weights(self, weight_init='xavier'):
         if weight_init == 'kaiming':
@@ -129,12 +142,54 @@ class PointNet2Classification(nn.Module):
 
         for module in self.SA_modules:
             xyz, features = module(xyz, features)
-        
-        return self.cls_layer(features).transpose(1, 2).contiguous().squeeze(dim=1)  # (B, 1 or 2)
-    
+
+        objectness, semantics = None, None
+        if self.config.USE_SEG_CLASSIFIER:
+            objectness = self.cls_layer(features).transpose(1, 2).contiguous().squeeze(dim=1)  # (B, 1 or 2)
+
+        if self.config.USE_SEM_REFINEMENT:
+            semantics = self.sem_layer(features).transpose(1, 2).contiguous().squeeze(dim=1)  # (B, K)
+        return objectness, semantics
+
+    def loss_fn(self, pred_obj_cls, pred_sem_cls, batch, sem_weights=None, train=True):
+        cls_loss, sem_loss = 0., 0.
+        if self.config.USE_SEG_CLASSIFIER:
+            cls_labels = batch["gt_label"].cuda().float()
+            cls_loss_func = F.binary_cross_entropy_with_logits
+            cls_loss = cls_loss_func(pred_obj_cls, cls_labels)
+
+        if self.config.USE_SEM_REFINEMENT:
+            segment_label = batch["semantic_label"].cuda().long() - 1
+            sem_loss_func = F.cross_entropy
+
+            # backpropagate only for valid segments
+            if train:
+                inds = torch.where(batch['gt_label'] == 1)
+                pred_sem_cls = pred_sem_cls[inds] 
+                segment_label = segment_label[inds]
+            else:
+                if self.config.USE_SEG_CLASSIFIER:
+                    inds = torch.where(pred_obj_cls.sigmoid() >= self.config.FG_THRESH)
+                    pred_sem_cls = pred_sem_cls[inds] 
+                    segment_label = segment_label[inds]
+            
+            if not self.config.USE_SEM_WEIGHTS:
+                sem_weights = None
+
+            sem_loss = sem_loss_func(pred_sem_cls, segment_label, weight=sem_weights)
+        return 3 * cls_loss + sem_loss
+
+
+class Config:
+    # Model config
+    USE_SEM_FEATURES = False
+    USE_SEG_CLASSIFIER = True
+    USE_SEM_REFINEMENT = False
+
 
 if __name__ == "__main__":
     point_cloud = torch.rand(1, 4096, 6).cuda()
-    model = PointNet2Classification(input_channels=3).cuda()
+    cfg = Config()
+    model = PointNet2Classification(cfg, input_channels=3).cuda()
     output = model(point_cloud)
     print(output.shape)
