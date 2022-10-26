@@ -19,12 +19,12 @@ done
 if [ -z "${exp_name}" ]
   then
     VAL_OUTPUT_RELATIVE="val_preds_TS${task_set}"
-    VAL_OUTPUT="results/validation/TS${task_set}"
+    VAL_OUTPUT="results/validation/${VAL_OUTPUT_RELATIVE}"
     TRK_OUTPUT="results/predictions/TS${task_set}"
     EVAL_OUTPUT="results/metrics/TS${task_set}"
 else
     VAL_OUTPUT_RELATIVE="val_preds_TS${task_set}_${exp_name}"
-    VAL_OUTPUT="results/validation/TS${task_set}_${exp_name}"
+    VAL_OUTPUT="results/validation/${VAL_OUTPUT_RELATIVE}"
     TRK_OUTPUT="results/predictions/TS${task_set}_${exp_name}"
     EVAL_OUTPUT="results/metrics/TS${task_set}_${exp_name}"
 fi
