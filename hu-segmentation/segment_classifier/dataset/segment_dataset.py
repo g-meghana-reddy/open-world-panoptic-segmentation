@@ -7,10 +7,11 @@ from torch.utils.data import Dataset
 
 
 class SegmentDataset(Dataset):
-    def __init__(self, dataset_path, split='training', n_points=1024):
+    def __init__(self, dataset_path, split='training', n_points=1024, num_things=8):
         self.path = dataset_path
         self.split = split
         self.n_points = n_points
+        self.num_things = num_things
 
         if split == "training":
             self.sequences = ["{:02d}".format(i) for i in range(11) if i != 8]
@@ -27,25 +28,32 @@ class SegmentDataset(Dataset):
                 print("Loading precomputed indices")
                 indices = dict(np.load(indices_file))
                 pos_indices, neg_indices = indices["pos_indices"], indices["neg_indices"]
+                sem_class_counts = indices["sem_class_counts"]
             else:
                 print("Precomputing indices, one-time only!")
                 pos_indices, neg_indices = [], []
+                sem_class_counts = np.zeros((self.num_things, 1))
                 for idx, path in enumerate(self.paths):
                     segment_data = dict(np.load(path))
                     if segment_data["gt_label"] == 1:
                         pos_indices.append(idx)
                     else:
                         neg_indices.append(idx)
+                    sem_class_counts[segment_data["semantic_label"] - 1] += 1
                 np.savez(
                     indices_file,
                     pos_indices=pos_indices,
-                    neg_indices=neg_indices
+                    neg_indices=neg_indices,
+                    sem_class_counts=sem_class_counts
                 )
 
             num_segments = len(self.paths)
             self.weights = torch.zeros(num_segments)
             self.weights[pos_indices] = num_segments / len(pos_indices)
             self.weights[neg_indices] = num_segments / len(neg_indices)
+            self.sem_weights = np.divide(
+                sem_class_counts.sum(), sem_class_counts, 
+                out=np.zeros_like(sem_class_counts), where=sem_class_counts != 0)
 
     def load_paths(self):
         paths = []

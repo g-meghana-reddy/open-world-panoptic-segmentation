@@ -29,8 +29,11 @@ class Config:
     DECAY_STEP_LIST = [50, 100, 150, 200, 250, 300]
 
     # Model config
+    USE_SEG_CLASSIFIER = True
     USE_SEM_FEATURES = False
     USE_SEM_REFINEMENT = False
+    USE_SEM_WEIGHTS = False
+    NUM_THINGS = 8
 
     # Optimizer parameters
     WEIGHT_DECAY = 0.0
@@ -57,6 +60,8 @@ def parse_args():
     parser.add_argument('-e', '--epochs', type=int, default=200)
     parser.add_argument('-b', '--batch_size', type=int, default=512)
     parser.add_argument('--use-sem-features', action="store_true")
+    parser.add_argument('--use-sem-refinement', action="store_true")
+    parser.add_argument('--use-sem-weights', action="store_true")
     return parser.parse_args()
 
 # __C.TRAIN.MOMS = [0.95, 0.85]
@@ -89,9 +94,8 @@ def create_scheduler(cfg, model, optimizer, last_epoch):
     return lr_scheduler, bnm_scheduler
 
 
-def train_one_iter(cfg, model, batch, optimizer):
+def train_one_iter(cfg, model, batch, optimizer, sem_weights=None):
     model.train()
-    loss_func = F.binary_cross_entropy_with_logits
     
     optimizer.zero_grad()
     xyz = batch["xyz"].cuda().float()
@@ -106,16 +110,19 @@ def train_one_iter(cfg, model, batch, optimizer):
     else:
         pts_input = xyz
 
-    pred_cls = model(pts_input)
-    pred_cls = pred_cls.view(-1)
-    loss = loss_func(pred_cls, cls_labels)
+    pred_cls, pred_sem = model(pts_input)
+    if pred_cls is not None:
+        pred_cls = pred_cls.view(-1)
+
+    pure_model = model.module if isinstance(model, torch.nn.DataParallel) else model
+    loss = pure_model.loss_fn(pred_cls, pred_sem, batch, sem_weights=sem_weights)
     loss.backward()
     clip_grad_norm_(model.parameters(), cfg.GRAD_NORM_CLIP)
     optimizer.step()
     return loss.item()
 
 
-def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkpoints/', ckpt_save_interval=5, eval_frequency=5):
+def train(cfg, model, optimizer, train_loader, sem_weights=None, val_loader=None, ckpt_dir='checkpoints/', ckpt_save_interval=5, eval_frequency=5):
     lr_scheduler, bnm_scheduler = create_scheduler(cfg, model, optimizer, -1)
     it = 0
     with tqdm.trange(0, cfg.EPOCHS, desc='epochs') as tbar, \
@@ -123,7 +130,7 @@ def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkp
         for epoch in tbar:
             for idx, batch in enumerate(train_loader):
                 cur_lr = lr_scheduler.get_last_lr()
-                loss = train_one_iter(cfg, model, batch, optimizer)
+                loss = train_one_iter(cfg, model, batch, optimizer, sem_weights)
                 it += 1
 
                 # log to console
@@ -154,7 +161,7 @@ def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkp
             if epoch % eval_frequency == 0 and val_loader is not None:
                 pbar.close()
                 with torch.no_grad():
-                    metric_dict = validate(cfg, model, val_loader)
+                    metric_dict = validate(cfg, model, val_loader, sem_weights)
                 if cfg.USE_WANDB:
                     wandb.log(metric_dict, step=it)
 
@@ -163,20 +170,18 @@ def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkp
             pbar.set_postfix(dict(total_it=it))
 
 
-def validate(cfg, model, val_loader):
+def validate(cfg, model, val_loader, sem_weights=None):
     model.eval()
-    loss_func = F.binary_cross_entropy_with_logits
     
     total_loss = 0.
-    gt, pred = [], []
+    cls_gt, cls_pred, sem_gt, sem_pred = [], [], [], []
     for i, batch in tqdm.tqdm(enumerate(val_loader, 0), total=len(val_loader), leave=False, desc='val'):
         optimizer.zero_grad()
 
         xyz = batch["xyz"].cuda().float()
         cls_labels = batch["gt_label"].cuda().float()
 
-        # TODO: use this later for segment refinement
-        # segm_label = batch["semantic_label"].cuda().long()
+        sem_label = batch["semantic_label"].cuda().long() - 1
 
         if cfg.USE_SEM_FEATURES:
             features = batch["semantic_features"].cuda().float()
@@ -184,28 +189,48 @@ def validate(cfg, model, val_loader):
         else:
             pts_input = xyz
 
-        pred_cls = model(pts_input)
-        pred_cls = pred_cls.view(-1)
-        loss = loss_func(pred_cls, cls_labels)
+        pred_cls, pred_sem = model(pts_input)
+        if pred_cls is not None:
+            pred_cls = pred_cls.view(-1)
+        
+        pure_model = model.module if isinstance(model, torch.nn.DataParallel) else model
+        loss = pure_model.loss_fn(pred_cls, pred_sem, batch, sem_weights=sem_weights, train=False)
         total_loss += loss.item()
 
-        pred_label = (pred_cls.sigmoid() >= cfg.FG_THRESH).long()
-        gt.extend(cls_labels.long().cpu().numpy())
-        pred.extend(pred_label.detach().cpu().numpy())
+        if cfg.USE_SEG_CLASSIFIER:
+            cls_pred_label = (pred_cls.sigmoid() >= cfg.FG_THRESH).long()
+            cls_gt.extend(cls_labels.long().cpu().numpy())
+            cls_pred.extend(cls_pred_label.detach().cpu().numpy())
+
+        if cfg.USE_SEM_REFINEMENT:
+            sem_pred_label = torch.argmax(pred_sem, axis=-1).long()
+            sem_gt.extend(sem_label.long().cpu().numpy())
+            sem_pred.extend(sem_pred_label.detach().cpu().numpy())
 
     # compute validation metrics
+    metric_dict = {'val/loss': total_loss}
+    if cfg.USE_SEG_CLASSIFIER:
+        add_metrics(metric_dict, cls_gt, cls_pred, "classifier")
+
+    if cfg.USE_SEM_REFINEMENT:
+        add_metrics(metric_dict, sem_gt, sem_pred, "semantics")
+    return metric_dict
+
+
+def add_metrics(metric_dict, gt, pred, name):
     acc = accuracy_score(gt, pred)
     balanced_acc = balanced_accuracy_score(gt, pred)
-    prec, recall, f1, _ = precision_recall_fscore_support(gt, pred, average="binary")
-    metric_dict = {
-        "val/loss": total_loss,
-        "val/acc": acc,
-        "val/balanced_acc": balanced_acc,
-        "val/f1": f1,
-        "val/prec": prec,
-        "val/recall": recall,
-    }
-    return metric_dict
+
+    if name == 'classifier':
+        avg = 'binary'
+    else:
+        avg = 'weighted'
+    prec, recall, f1, _ = precision_recall_fscore_support(gt, pred, average=avg)
+
+    name = 'val/{}_'.format(name)
+    keys = [name + 'acc', name + 'balanced_acc', name + 'f1', name + 'prec', name + 'recall']
+    values = [acc, balanced_acc, f1.item(), prec.item(), recall.item()]
+    metric_dict.update(zip(keys, values))
 
 
 if __name__ == "__main__":
@@ -214,9 +239,11 @@ if __name__ == "__main__":
 
     # load training config
     cfg = Config()
+    cfg.BATCH_SIZE = args.batch_size
     cfg.EPOCHS = args.epochs
     cfg.USE_SEM_FEATURES = args.use_sem_features
-    cfg.BATCH_SIZE = args.batch_size
+    cfg.USE_SEM_REFINEMENT = args.use_sem_refinement
+    cfg.USE_SEM_WEIGHTS = args.use_sem_weights
 
     if cfg.USE_SEM_FEATURES:
         feature_dims = 256
@@ -228,7 +255,7 @@ if __name__ == "__main__":
         wandb.run.name = args.exp
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = PointNet2Classification(input_channels=feature_dims, num_classes=1)
+    model = PointNet2Classification(cfg, input_channels=feature_dims, num_classes=1)
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
     model.to(device)
@@ -272,5 +299,13 @@ if __name__ == "__main__":
         sampler=valid_sampler,
         collate_fn=valid_dataset.collate_batch
     )
+
+    if cfg.USE_SEM_WEIGHTS:
+        sem_weights = torch.from_numpy(train_dataset.sem_weights).cuda().float()
+    else:
+        sem_weights = None
     
-    train(cfg, model, optimizer, train_loader, val_loader=valid_loader, ckpt_dir=ckpt_dir)
+    train(
+        cfg, model, optimizer, train_loader, sem_weights=sem_weights, 
+        val_loader=valid_loader, ckpt_dir=ckpt_dir
+    )
