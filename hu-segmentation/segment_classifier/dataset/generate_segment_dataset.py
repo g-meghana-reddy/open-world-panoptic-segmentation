@@ -13,6 +13,8 @@ np.random.seed(0)
 torch.manual_seed(0)
 torch.cuda.manual_seed_all(0)
 
+DATA_DIR = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/"
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -119,6 +121,7 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
             r_inds_list = batch.reproj_inds
             r_mask_list = batch.reproj_masks
             labels_list = batch.val_labels
+            xyz_points = batch.points
             ins_labels_list = batch.val_ins_labels
             centers_output = centers_output.cpu().detach().numpy()
             embedding = embedding.cpu().detach().numpy()
@@ -149,6 +152,8 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
                 probs = stk_probs[i0:i0 + length]
                 # centerness outputs
                 center_props = centers_output[i0:i0 + length]
+                # xyz points w.r.t first frame
+                frame_xyz_points = xyz_points[b_i].cpu().detach().numpy()
                 # embedding outputs
                 emb = embedding[i0:i0 + length]
 
@@ -162,7 +167,8 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
                 # projected labels
                 proj_labels = frame_labels[proj_inds]
                 proj_ins_labels = frame_ins_labels[proj_inds]
-
+                # projected xyz points
+                proj_xyz_points = frame_xyz_points[proj_inds]
                 # Safe check if only one point:
                 if proj_probs.ndim < 2:
                     proj_probs = np.expand_dims(proj_probs, 0)
@@ -177,6 +183,7 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
                 frame_gt_ins_labels = np.zeros((proj_mask.shape[0]))
                 frame_center_preds = np.zeros((proj_mask.shape[0]))
                 frame_emb_preds = np.zeros((proj_mask.shape[0], config.first_features_dim), dtype=np.float32)
+                frame_xyz = np.zeros((proj_mask.shape[0], 3), dtype=np.float32)
 
                 # Insert false columns for ignored labels
                 frame_probs_uint8_bis = frame_probs_uint8.copy()
@@ -195,18 +202,22 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
                 frame_center_preds[proj_mask] = proj_center_probs[:, 0]
                 frame_emb_preds[proj_mask] = proj_emb
                 frame_probs_softmax[proj_mask, :] = proj_probs
+                frame_xyz[proj_mask, :] = proj_xyz_points
                 frame_preds = test_loader.dataset.label_values[np.argmax(frame_probs_uint8_bis,axis=1)].astype(np.int32)
 
-                
                 seq_name = test_loader.dataset.sequences[s_ind]
                 frame_name = test_loader.dataset.frames[s_ind][f_ind]
                 filepath = join(data_path, seq_name, frame_name)
-                scan_file = join('../../../data/SemanticKitti/sequences', seq_name, 'velodyne', frame_name+'.bin')
+                scan_file = join(DATA_DIR, 'sequences', seq_name, 'velodyne', frame_name + '.bin')
                 
                 # Construct the hierarchical tree per scan for all the thing class points and 
                 # compute scores per segment to generate the segment dataset
                 print("*************** Started constructing tree scan_file: {}_{}  *************** ".format(seq_name, frame_name))
-                generate_segments_per_scan(scan_file, frame_emb_preds, frame_gt_labels, frame_gt_ins_labels, filepath) 
+                # generate_segments_per_scan(scan_file, frame_emb_preds, frame_gt_labels, frame_gt_ins_labels, filepath) 
+                generate_segments_per_scan(
+                    scan_file, frame_emb_preds, proj_labels, frame_gt_labels,
+                    frame_gt_ins_labels, frame_xyz, filepath
+                )
                 print("*************** Ended constructing tree scan_file: {}_{}    *************** ".format(seq_name, frame_name))
                 i0 += length
 
@@ -227,7 +238,7 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
 
     return  
     
-def generate_segments_per_scan(scan_file, frame_emb_preds, frame_gt_labels,frame_gt_ins_labels, filepath):
+def generate_segments_per_scan(scan_file, frame_emb_preds, frame_pred_labels, frame_gt_labels, frame_gt_ins_labels, frame_xyz, filepath):
     '''Constructs the hierarchical tree using the thing class points and per 
         node/segment score is computed to generate the segment dataset.'''
     #****************************************************
@@ -239,11 +250,12 @@ def generate_segments_per_scan(scan_file, frame_emb_preds, frame_gt_labels,frame
     #********************************************************************
     # Compute the things mask and compute labels, xyz points accordingly
     #********************************************************************
-    
     # thing classes: [1,2,3,4,5,6,7,8]
-    things_mask = np.where(np.logical_and(frame_gt_labels > 0 , frame_gt_labels < 9))
+    # things_mask = np.where(np.logical_and(frame_gt_labels > 0 , frame_gt_labels < 9))
+    things_mask = np.where(np.logical_and(frame_pred_labels > 0 , frame_pred_labels < 9))
 
     # generate all labels for things only
+    first_frame_coordinates = frame_xyz[things_mask]
     pts_velo_cs_objects = pts_velo_cs[things_mask]
     pts_indexes_objects = pts_indexes[things_mask]
     pts_embeddings_objects = frame_emb_preds[things_mask]
@@ -260,21 +272,18 @@ def generate_segments_per_scan(scan_file, frame_emb_preds, frame_gt_labels,frame
     #********************************************************************
     # Initialize the TreeSegment class for the current scan
     #********************************************************************
-
     original_indices = np.arange(pts_velo_cs_objects.shape[0])
     segment_tree = TreeSegment(original_indices, 0)
     
     #********************************************************************
     # Compute the hierarchical tree of segments
     #********************************************************************
-
     segment_tree.child_segments = compute_hierarchical_tree(eps_list_tum, pts_velo_cs_objects, pts_indexes_objects, gt_instance_indexes_objects, gt_instance_ids_objects, original_indices)
 
     #********************************************************************
     # Traverse the computed hierarchical tree to store the segments
     #********************************************************************
-    segment_tree_traverse(segment_tree, pts_embeddings_objects, pts_velo_cs_objects, gt_semantic_labels, filepath, 0, set())
-    
+    segment_tree_traverse(segment_tree, pts_embeddings_objects, pts_velo_cs_objects, gt_semantic_labels, first_frame_coordinates, filepath, 0, set())
     return
 
 if __name__ == '__main__':
@@ -290,7 +299,7 @@ if __name__ == '__main__':
     args = parse_args()
 
     # Set which gpu is going to be used
-    GPU_ID = str(args.gpu_id) # '4'
+    GPU_ID = str(args.gpu_id)
     # if torch.cuda.device_count() > 1:
     #     GPU_ID = '0, 1'
 
@@ -360,9 +369,9 @@ if __name__ == '__main__':
 
     # Initialize datasets
     # training_dataset = SemanticKittiDataset(config, set='training',
-    #                                           balance_classes=False, datapath= '../data/SemanticKitti')
+    #                                           balance_classes=False, datapath=DATA_DIR)
     test_dataset = SemanticKittiDataset(config, set='validation',
-                                        balance_classes=False, seqential_batch=True, datapath= '../../../data/SemanticKitti')
+                                        balance_classes=False, seqential_batch=True, datapath=DATA_DIR)
 
     # Initialize samplers
     # training_sampler = SemanticKittiSampler(training_dataset)
