@@ -318,7 +318,7 @@ if __name__ == '__main__':
             sem_label_gt = sem_gt_objects[ins_gt_objects == gt_ins]
             sem_label = np.bincount(sem_label_gt).argmax()
 
-            # pred_ins = unique_pred[matched_pred_idx]
+            pred_ins = unique_pred[matched_pred_idx]
             # sem_label_pred = sem_pred_objects[instance_pred_obj == pred_ins]
 
             # # softmax mean
