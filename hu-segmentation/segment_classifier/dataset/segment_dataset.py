@@ -94,6 +94,7 @@ class SegmentDataset(Dataset):
 
         np.random.shuffle(chosen_idxs)
         segment_data["indices"] = segment_data["indices"][chosen_idxs]
+        segment_data["first_frame_xyz"] = segment_data["first_frame_xyz"][chosen_idxs]
         segment_data["xyz"] = segment_data["xyz"][chosen_idxs]
         segment_data["semantic_features"] = segment_data["semantic_features"][chosen_idxs]
 
