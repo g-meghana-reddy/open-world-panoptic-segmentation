@@ -107,7 +107,10 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=2)
     parser.add_argument("-d", "--dataset", help="Dataset", default='semantic-kitti')
-    parser.add_argument("-o", "--output_dir", help="Output directory", type=str, default='test/LOSP')
+    parser.add_argument(
+        "-o", "--objsem_folder", help="Folder with object and semantic predictions", type=str, 
+        default="/project_data/ramanan/mganesin/4D-PLS/test/4DPLS_original_params_original_repo_nframes1_1e-3_softmax/val_probs")
+    parser.add_argument("-sd", "--save_dir", help="Output directory", type=str)
     parser.add_argument("-s", "--sequence", help="Sequence", type=int, default=8)
     args = parser.parse_args()
     return args
@@ -125,15 +128,13 @@ if __name__ == '__main__':
     unk_labels = range(1, 9)
     # unk_labels = [1, 2, 3, 10]
 
+    objsem_folder = args.objsem_folder
     if args.dataset == 'semantic-kitti':
         seq = '{:02d}'.format(args.sequence)
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/velodyne/'
         scan_files = load_paths(scan_folder)
-        objsem_folder = '/project_data/ramanan/mganesin/4D-PLS/test/4DPLS_original_params_original_repo_nframes1_1e-3_softmax/val_probs'
-        # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/results/validation/val_preds_TS{}_original_params_1_frames_1e-3_importance_None_str1_bigpug_1_huseg_known/val_probs/'.format(args.task_set)
         label_folder = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/" + seq + "/labels/"
         label_files = sorted(glob.glob(label_folder + "*.label"))
-        # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_4dpls_pretrained/val_probs/'
 
         config = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti-orig.yaml"
         with open(config, 'r') as stream:
@@ -193,7 +194,6 @@ if __name__ == '__main__':
     assert (len(semantic_files) == len(scan_files))
 
     for idx in tqdm(range(len(objectness_files))):
-        
         # load scan
         scan_file = scan_files[idx]
         pts_velo_cs = load_vertex(scan_file)
@@ -223,9 +223,6 @@ if __name__ == '__main__':
         parent_dir, ins_base = os.path.split(instance_file)
         segmented_file = os.path.join(parent_dir, ins_base.replace('_i', '_u'))
 
-        #for unk_label in unk_labels:
-        #     mask = labels == unk_label
-        # background_mask = labels != unk_label
         mask = np.where(np.logical_and(labels > 0 , labels < 9))
 
         pts_velo_cs_objects = pts_velo_cs[mask]
@@ -321,38 +318,8 @@ if __name__ == '__main__':
             unmatched_ins = unique_pred[unmatched_pred_idx]
             unmatched_mask = instance_pred_obj == unmatched_ins
 
-            # Ignore the rejected segments by assigning to unlabeled class
+            # Ignore the rejected segments
             instances[unmatched_mask] = 9999
-
-        for (matched_pred_idx, matched_gt_idx) in zip(matched_pred_idxs, matched_gt_idxs):
-            # find semantic label for transfer
-            
-            # gt_ins = unique_gt[matched_gt_idx]
-            # # print(matched_gt_idx, gt_ins, ins_gt_objects)
-            # sem_label_gt = sem_gt_objects[ins_gt_objects == gt_ins]
-            # sem_label_gt_ = np.bincount(sem_label_gt).argmax()
-
-            pred_ins = unique_pred[matched_pred_idx]
-            sem_label_pred = sem_pred_objects[instance_pred_obj == pred_ins]
-
-            # softmax mean
-            sem_label_probs = softmax_scores_pred[instance_pred_obj == pred_ins][:, :8]
-            sem_label = np.mean(sem_label_probs, axis = 0) * np.bincount(sem_label_pred, minlength=9)[1:]
-            sem_label = sem_label.argmax() + 1
-            
-            # majority count
-            # sem_label_major = np.bincount(sem_label_pred).argmax()
-            
-            # transfer the label
-            labels[instances == pred_ins] = sem_label
-            # if np.equal(sem_label_gt,sem_label).sum() < len(sem_label_gt):
-            # if sem_label_major != sem_label and sem_label == sem_label_gt_:
-            #     print("========================================================")
-            #     print("idx: {}".format(idx))
-            #     print("sem_label_softmax: {}".format(np.sum(sem_label_probs, axis = 0)))
-            #     print("sem_gt_label: {}, sem_gt:{}, sem_label_pred_transfer: {} , major transfer: {} , sem_label_pred: {}".format(sem_label_gt_, sem_label_gt, sem_label, sem_label_major, sem_label_pred))
-            #     print("========================================================")
-        # ========================================================
 
         # Create .label files using the updated instance and semantic labels
         sem_labels = labels.astype(np.int32)
@@ -360,5 +327,5 @@ if __name__ == '__main__':
         instances = np.left_shift(instances.astype(np.int32), 16)
         new_preds = np.bitwise_or(instances, inv_sem_labels)
         new_preds.tofile('{}/sequences/{:02d}/predictions/{:07d}.label'.format(
-                args.output_dir, args.sequence, idx))
+                args.save_dir, args.sequence, idx))
         

@@ -108,8 +108,11 @@ def parse_args():
     parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=2)
     parser.add_argument("-d", "--dataset", help="Dataset", default='semantic-kitti')
     parser.add_argument("-s", "--sequence", help="Sequence", type=int, default=8)
-    parser.add_argument("-o", "--objsem_folder", help="Folder with object and semantic predictions", type=str, required=True)
-    parser.add_argument("-sd", "--save_dir", help="Directory to save outputs", type=str)
+    parser.add_argument(
+        "-o", "--objsem_folder", help="Folder with object and semantic predictions", type=str, 
+        default="/project_data/ramanan/mganesin/4D-PLS/test/4DPLS_original_params_original_repo_nframes1_1e-3_softmax/val_probs")
+    parser.add_argument("-sd", "--save_dir", help="Output directory", type=str)
+    parser.add_argument("--threshold", help="Objectness threshold", type=float, default=1.)
     args = parser.parse_args()
     return args
 
@@ -117,20 +120,26 @@ def parse_args():
 if __name__ == '__main__':
 
     args = parse_args()
-    if args.task_set == 0:
-        unk_labels = [7]
-    elif args.task_set == 1:
-        unk_label = [10]
+    # if args.task_set == 0:
+    #     unk_label = 7
+    # elif args.task_set == 1:
+    #     unk_label = 10
+    # else:
+    #     raise ValueError('Unknown task set: {}'.format(args.task_set))
+    # unk_labels = range(1, 7)
+    if args.task_set == 1:
+        max_inst_label = 4
     elif args.task_set == -1:
-        unk_labels = range(1,9)
+        max_inst_label = 9
     else:
         raise ValueError('Unknown task set: {}'.format(args.task_set))
-
+    
+    objsem_folder = args.objsem_folder
     if args.dataset == 'semantic-kitti':
         seq = '{:02d}'.format(args.sequence)
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/velodyne/'
         scan_files = load_paths(scan_folder)
-
+        
         if args.task_set == -1:
             config = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti-orig.yaml"
         elif args.task_set == 1:
@@ -156,6 +165,7 @@ if __name__ == '__main__':
     elif args.dataset == 'kitti-raw':
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti-Raw/2011_09_26/'
         scan_files = glob.glob(scan_folder + '*/velodyne_points/data/*.bin')
+        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_raw_TS{}/val_preds/'.format(args.task_set)
         
     elif args.dataset == 'kitti-360':
         seq = '2013_05_28_drive_{:04d}_sync'.format(args.sequence)
@@ -167,7 +177,12 @@ if __name__ == '__main__':
             os.path.join(scan_folder, file_id + '.bin') for file_id in file_ids
         ])
         
-    objsem_folder = args.objsem_folder
+        # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}_kitti360/val_probs/'.format(args.task_set)
+        objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/results/validation/val_preds_TS1_kitti360_1_frames_1e-3_huseg_known_thresholded/val_probs/'#.format(args.task_set)
+    
+    if not os.path.exists(args.save_dir):
+        os.makedirs(args.save_dir)
+
     objsem_files = load_paths(objsem_folder)
 
     sem_file_mask = []
@@ -177,15 +192,9 @@ if __name__ == '__main__':
         if '_c.' in file:
             obj_file_mask.append(idx)
         elif '_i.' in file:
-            # Added for nframes=2
-            frame_name = file.split('/')[-1]
-            if len(frame_name.split('_')) < 4:
-                ins_file_mask.append(idx)
-        elif '_e.' not in file and '_u.' not in file and '_t.' not in file and '_pots.' not in file and '.ply' not in file and '_s.' not in file:
-            # Added for nframes=2
-            frame_name = file.split('/')[-1]
-            if len(frame_name.split('_')) < 3:
-                sem_file_mask.append(idx)
+            ins_file_mask.append(idx)
+        elif '_e.' not in file and '_u.' not in file and '_s.' not in file and '_t.' not in file and '_pots.' not in file and '.ply' not in file:
+            sem_file_mask.append(idx)
     
     objectness_files = objsem_files[obj_file_mask]
     semantic_files = objsem_files[sem_file_mask]
@@ -218,49 +227,58 @@ if __name__ == '__main__':
         instance_file = instance_files[idx]
         instances = np.load(instance_file)
         parent_dir, ins_base = os.path.split(instance_file)
-        # segmented_file = os.path.join(parent_dir, ins_base.replace('_i', '_u'))
 
-        for unk_label in unk_labels:
-            mask = labels == unk_label
-            background_mask = labels != unk_label
+        if args.task_set == 1:
+            mask = np.where(np.logical_and(labels > 0 , labels < max_inst_label, labels == 10))
+        else:
+            mask = np.where(np.logical_and(labels > 0 , labels < max_inst_label))
 
-            pts_velo_cs_objects = pts_velo_cs[mask]
-            objectness_objects = objectness[mask]  # todo: change objectness_objects into a local variable
-            pts_indexes_objects = pts_indexes[mask]
+        pts_velo_cs_objects = pts_velo_cs[mask]
+        objectness_objects = objectness[mask]  # todo: change objectness_objects into a local variable
+        pts_indexes_objects = pts_indexes[mask]
 
-            assert (len(pts_velo_cs_objects) == len(objectness_objects))
+        assert (len(pts_velo_cs_objects) == len(objectness_objects))
 
-            if len(pts_velo_cs_objects) < 1:
-                np.save(segmented_file, instances)
-                continue
+        if len(pts_velo_cs_objects) < 1:
+            assert False
+            continue
 
-            # segmentation with point-net
-            id_ = 0
-            # eps_list = [2.0, 1.0, 0.5, 0.25]
-            eps_list_tum = [1.2488, 0.8136, 0.6952, 0.594, 0.4353, 0.3221]
-            indices, scores = segment(id_, eps_list_tum, pts_velo_cs_objects[:, :3])
+        # mask out 4dpls instance predictions
+        instances[mask] = 0
 
-            # flatten list(list(...(indices))) into list(indices)
-            flat_indices = flatten_indices(indices)
-            # map from object_indexes to pts_indexes
-            mapped_indices = []
-            for indexes in flat_indices:
-                mapped_indices.append(pts_indexes_objects[indexes].tolist())
+        # segmentation with point-net
+        id_ = 0
+        # eps_list = [2.0, 1.0, 0.5, 0.25]
+        eps_list_tum = [1.2488, 0.8136, 0.6952, 0.594, 0.4353, 0.3221]
+        indices, scores = segment(id_, eps_list_tum, pts_velo_cs_objects[:, :3])
 
-            # mapped_flat_indices = pts_indexes_objects
-            flat_scores = flatten_scores(scores)
+        # flatten list(list(...(indices))) into list(indices)
+        flat_indices = flatten_indices(indices)
+        # map from object_indexes to pts_indexes
+        mapped_indices = []
+        for indexes in flat_indices:
+            mapped_indices.append(pts_indexes_objects[indexes].tolist())
 
-            new_instance = instances.max() + 1
-            for id_, indices in enumerate(mapped_indices):
-                instances[indices] = new_instance + id_
-                # majority semantic label in the segment is the new assignment
-                labels[indices] = np.bincount(labels[indices])[:max(unk_labels)].argmax()
-        # np.save(segmented_file, instances)
+        # mapped_flat_indices = pts_indexes_objects
+        flat_scores = flatten_scores(scores)
+
+        new_instance = instances.max() + 1
+        for id, indices in enumerate(mapped_indices):
+            # if flat_scores[id] < args.threshold:
+            #     instances[indices] = -1
+            # else:
+            instances[indices] = new_instance + id
+
+            # majority semantic label in the segment is the new assignment
+            labels[indices] = np.bincount(labels[indices]).argmax()
+
+            # softmax based label transfer
+            # things_softmax = softmax_scores[indices][:, :8]
+            # labels[indices] = np.mean(things_softmax, axis = 0).argmax() + 1
 
         # Create .label files using the updated instance and semantic labels
         sem_labels = labels.astype(np.int32)
         inv_sem_labels = inv_learning_map[sem_labels]
         instances = np.left_shift(instances.astype(np.int32), 16)
         new_preds = np.bitwise_or(instances, inv_sem_labels)
-
         new_preds.tofile(segmented_file)
