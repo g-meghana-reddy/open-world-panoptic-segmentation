@@ -184,17 +184,15 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
                 frame_center_preds = np.zeros((proj_mask.shape[0]))
                 frame_emb_preds = np.zeros((proj_mask.shape[0], config.first_features_dim), dtype=np.float32)
                 frame_xyz = np.zeros((proj_mask.shape[0], 3), dtype=np.float32)
+                frame_probs = frame_probs_uint8[proj_mask, :].astype(np.float32) / 255
+                frame_probs = test_smooth * frame_probs + (1 - test_smooth) * proj_probs
+                frame_probs_uint8[proj_mask, :] = (frame_probs * 255).astype(np.uint8)
 
                 # Insert false columns for ignored labels
                 frame_probs_uint8_bis = frame_probs_uint8.copy()
                 for l_ind, label_value in enumerate(test_loader.dataset.label_values):
                     if label_value in test_loader.dataset.ignored_labels:
                         frame_probs_uint8_bis = np.insert(frame_probs_uint8_bis, l_ind, 0, axis=1)
-
-
-                frame_probs = frame_probs_uint8[proj_mask, :].astype(np.float32) / 255
-                frame_probs = test_smooth * frame_probs + (1 - test_smooth) * proj_probs
-                frame_probs_uint8[proj_mask, :] = (frame_probs * 255).astype(np.uint8)
 
                 # Compute the final frame wise projections
                 frame_gt_labels[proj_mask] = proj_labels
@@ -215,7 +213,7 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
                 print("*************** Started constructing tree scan_file: {}_{}  *************** ".format(seq_name, frame_name))
                 # generate_segments_per_scan(scan_file, frame_emb_preds, frame_gt_labels, frame_gt_ins_labels, filepath) 
                 generate_segments_per_scan(
-                    scan_file, frame_emb_preds, proj_labels, frame_gt_labels,
+                    scan_file, frame_emb_preds, frame_preds, frame_gt_labels,
                     frame_gt_ins_labels, frame_xyz, filepath
                 )
                 print("*************** Ended constructing tree scan_file: {}_{}    *************** ".format(seq_name, frame_name))
