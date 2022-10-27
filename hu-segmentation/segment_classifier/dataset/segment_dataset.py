@@ -78,17 +78,19 @@ class SegmentDataset(Dataset):
             chosen_idxs = np.random.choice(np.arange(num_points), self.n_points, replace=False)
         # TODO: something smarter than this
         else:
-            if num_points < self.n_points:
-                residual = self.n_points - num_points
-                segment_data["indices"] = np.concatenate([
-                    segment_data["indices"], -1 * np.ones(residual)])
-                segment_data["xyz"] = np.vstack([
-                    segment_data["xyz"], np.zeros((residual, 3))
-                ])
-                segment_data["semantic_features"] = np.vstack([
-                    segment_data["semantic_features"], np.zeros((residual, 256))
-                ])
             chosen_idxs = np.arange(0, self.n_points, dtype=np.int32)
+            if num_points < self.n_points:
+                extra_idxs = np.random.choice(chosen_idxs, self.npoints - len(chosen_idxs), replace=True)
+                chosen_idxs = np.concatenate([chosen_idxs, extra_idxs], axis=0)
+                # residual = self.n_points - num_points
+                # segment_data["indices"] = np.concatenate([
+                #     segment_data["indices"], -1 * np.ones(residual)])
+                # segment_data["xyz"] = np.vstack([
+                #     segment_data["xyz"], np.zeros((residual, 3))
+                # ])
+                # segment_data["semantic_features"] = np.vstack([
+                #     segment_data["semantic_features"], np.zeros((residual, 256))
+                # ])
 
         np.random.shuffle(chosen_idxs)
         segment_data["indices"] = segment_data["indices"][chosen_idxs]
