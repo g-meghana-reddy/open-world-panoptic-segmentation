@@ -278,6 +278,9 @@ if __name__ == '__main__':
         instances = np.load(instance_file)
         parent_dir, ins_base = os.path.split(instance_file)
 
+        #for unk_label in unk_labels:
+        #     mask = labels == unk_label
+        # background_mask = labels != unk_label
         pred_mask = np.where(np.logical_and(labels > 0 , labels < 9))
         gt_mask = np.where(np.logical_and(sem_gt > 0 , sem_gt < 9))
 
@@ -327,7 +330,7 @@ if __name__ == '__main__':
             # else:
             instances[indices] = new_instance + id
             # majority semantic label in the segment is the new assignment
-            labels[indices] = np.bincount(labels[indices]).argmax()
+            labels[indices] = np.bincount(sem_gt[indices]).argmax()
 
             # softmax based label transfer
             # things_softmax = softmax_scores[indices][:, :8]

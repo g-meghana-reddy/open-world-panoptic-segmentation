@@ -221,7 +221,6 @@ if __name__ == '__main__':
         instance_file = instance_files[idx]
         instances = np.load(instance_file)
         parent_dir, ins_base = os.path.split(instance_file)
-        segmented_file = os.path.join(parent_dir, ins_base.replace('_i', '_u'))
 
         mask = np.where(np.logical_and(labels > 0 , labels < 9))
 

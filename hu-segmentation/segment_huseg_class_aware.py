@@ -232,7 +232,6 @@ if __name__ == '__main__':
             assert (len(pts_velo_cs_objects) == len(objectness_objects))
 
             if len(pts_velo_cs_objects) < 1:
-                np.save(segmented_file, instances)
                 continue
 
             # segmentation with point-net
