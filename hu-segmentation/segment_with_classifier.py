@@ -12,29 +12,36 @@ import torch
 from tqdm import tqdm
 
 from segment_classifier.model.pointnet2 import PointNet2Classification
-from tree_utils import flatten_scores, flatten_indices
+from tree_utils import flatten_indices, flatten_labels, flatten_scores
 from utils import *
 
 
 NUM_POINTS = 1024
 
+class Config:
+    # Model config
+    USE_SEG_CLASSIFIER = True
+    USE_SEM_FEATURES = False
+    USE_SEM_REFINEMENT = False
+    USE_SEM_WEIGHTS = False
+    NUM_THINGS = 8
+
+    FG_THRESH = 0.5
+    N_POINTS = 1024
+
+
 # Use the segment classifier to assign each segment a score
 def evaluate(model, points, features=None):
     num_points_in_segment = points.shape[0]
-
-    if num_points_in_segment <= 25:
-        return 0.
 
     # TODO: what to do about n_points?
     if num_points_in_segment > NUM_POINTS:
         chosen_idxs = np.random.choice(np.arange(num_points_in_segment), NUM_POINTS, replace=False)
     else:
+        chosen_idxs = np.arange(0, num_points_in_segment, dtype=np.int32)
         if num_points_in_segment < NUM_POINTS:
-            residual = NUM_POINTS - num_points_in_segment
-            points = np.concatenate([points, np.zeros((residual, points.shape[1]))])
-            if features is not None:
-                features = np.concatenate([features, np.zeros((residual, features.shape[1]))])
-        chosen_idxs = np.arange(0, NUM_POINTS, dtype=np.int32)
+            extra_idxs = np.random.choice(chosen_idxs, NUM_POINTS - len(chosen_idxs), replace=True)
+            chosen_idxs = np.concatenate([chosen_idxs, extra_idxs], axis=0)
     np.random.shuffle(chosen_idxs)
 
     points = torch.from_numpy(points[chosen_idxs]).cuda().float()
@@ -44,8 +51,11 @@ def evaluate(model, points, features=None):
 
     # get segment score using classifier
     with torch.no_grad():
-        score = model(points[None]).sigmoid().cpu().numpy().item()
-    return score
+        cls_, sem = model(points[None])
+        score = cls_.sigmoid().cpu().numpy().item()
+        if sem is not None:
+            sem = sem.softmax(-1).argmax().cpu().numpy().item() + 1
+    return score, sem
 
     
 def segment(model, id_, eps_list, cloud, features=None, original_indices=None, aggr_func='min'):
@@ -64,22 +74,24 @@ def segment(model, id_, eps_list, cloud, features=None, original_indices=None, a
     labels = dbscan.labels_
 
     # evaluate every segment
-    indices, scores = [], []
+    indices, scores, sem_labels = [], [], []
     for unique_label in np.unique(labels):
         inds = original_indices[np.flatnonzero(labels == unique_label)]
         indices.append(inds.tolist())
         segment_features = features[inds] if features is not None else None
-        scores.append(evaluate(model, cloud[inds], segment_features))
+        score, sem_label = evaluate(model, cloud[inds], segment_features)
+        scores.append(score)
+        sem_labels.append(sem_label)
 
     # return if we are done
     if len(eps_list) == 1:
-        return indices, scores
+        return indices, scores, sem_labels
 
     # expand recursively
-    final_indices, final_scores = [], []
-    for i, (inds, score) in enumerate(zip(indices, scores)):
+    final_indices, final_scores, final_sem_labels = [], [], []
+    for i, (inds, score, sem_label) in enumerate(zip(indices, scores, sem_labels)):
         # focus on this segment
-        fine_indices, fine_scores = segment(
+        fine_indices, fine_scores, fine_sem_labels = segment(
             model, id_, eps_list[1:], cloud, features=features, original_indices=inds)
         # flatten scores to get the minimum (keep structure)
         flat_fine_scores = flatten_scores(fine_scores)
@@ -114,10 +126,12 @@ def segment(model, id_, eps_list, cloud, features=None, original_indices=None, a
         if score < aggr_score:
             final_indices.append(fine_indices)
             final_scores.append(fine_scores)
+            final_sem_labels.append(fine_sem_labels)
         else: # otherwise
             final_indices.append(inds)
             final_scores.append(score)
-    return final_indices, final_scores
+            final_sem_labels.append(sem_label)
+    return final_indices, final_scores, final_sem_labels
 
 
 def parse_args():
@@ -125,10 +139,11 @@ def parse_args():
     parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=2)
     parser.add_argument("-d", "--dataset", help="Dataset", default='semantic-kitti')
     parser.add_argument("-s", "--sequence", help="Sequence", type=int, default=8)
-    parser.add_argument("-o", "--objsem_folder", help="Folder with object and semantic predictions", type=str, required=True)
+    parser.add_argument("-o", "--objsem_folder", help="Folder with object and semantic predictions", type=str, default="/project_data/ramanan/mganesin/4D-PLS/test/4DPLS_original_params_original_repo_nframes1_1e-3_softmax/val_probs")
     parser.add_argument("-sd", "--save_dir", help="Save directory", type=str, default='test/LOSP')
     parser.add_argument("--ckpt", help="Checkpoint to load for segment classifier", type=str, default=None)
     parser.add_argument("--use-sem-features", help="Whether to use semantic features in classifier", action="store_true")
+    parser.add_argument("--use-sem-refinement", help="Whether to use semantic refinement head", action="store_true")
     args = parser.parse_args()
     return args
 
@@ -145,7 +160,10 @@ if __name__ == '__main__':
     else:
         raise ValueError('Unknown task set: {}'.format(args.task_set))
 
-    if args.use_sem_features:
+    if args.use_sem_refinement:
+        in_channels = 0 # 256
+        args.ckpt = "/project_data/ramanan/mganesin/4D-PLS/hu-segmentation/segment_classifier/results/sem_obj/checkpoints/epoch_100.pth"
+    elif args.use_sem_features:
         in_channels = 256
         args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/sem_xyz/checkpoints/epoch_200.pth"
     else:
@@ -154,7 +172,8 @@ if __name__ == '__main__':
 
     # instantiate the segment classifier
     print("Loading segment classifier from checkpoint")
-    classifier = PointNet2Classification(in_channels).cuda()
+    cfg = Config()
+    classifier = PointNet2Classification(cfg, in_channels).cuda()
     ckpt = torch.load(args.ckpt)
     classifier.load_state_dict(ckpt["model_state"])
     classifier.eval()
@@ -162,6 +181,7 @@ if __name__ == '__main__':
     if args.dataset == 'semantic-kitti':
         seq = '{:02d}'.format(args.sequence)
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/velodyne/'
+        # scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/velodyne_first_frame/'
         scan_files = load_paths(scan_folder)
 
         if args.task_set == -1:
@@ -280,7 +300,7 @@ if __name__ == '__main__':
         id_ = 0
         # eps_list = [2.0, 1.0, 0.5, 0.25]
         eps_list_tum = [1.2488, 0.8136, 0.6952, 0.594, 0.4353, 0.3221]
-        indices, scores = segment(
+        indices, scores, sem_labels = segment(
             classifier, id_, eps_list_tum,
             pts_velo_cs_objects[:, :3], features=semantic_features
         )
@@ -293,11 +313,15 @@ if __name__ == '__main__':
             mapped_indices.append(pts_indexes_objects[indexes].tolist())
 
         # mapped_flat_indices = pts_indexes_objects
-        # flat_scores = flatten_scores(scores)
+        flat_scores = flatten_scores(scores)
+        if args.use_sem_features:
+            flat_sem_labels = flatten_labels(sem_labels)
 
         new_instance = instances.max() + 1
         for id_, indices in enumerate(mapped_indices):
             instances[indices] = new_instance + id_
+            if args.use_sem_features:
+                labels[indices] = flat_sem_labels[id_]
 
         # Create .label files using the updated instance and semantic labels
         sem_labels = labels.astype(np.int32)

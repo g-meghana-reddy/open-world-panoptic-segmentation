@@ -2,6 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.ops import sigmoid_focal_loss
 
 from model.pointnet2_modules import PointnetSAModule
 import model.pytorch_utils as pt_utils
@@ -155,8 +156,12 @@ class PointNet2Classification(nn.Module):
         cls_loss, sem_loss = 0., 0.
         if self.config.USE_SEG_CLASSIFIER:
             cls_labels = batch["gt_label"].cuda().float()
-            cls_loss_func = F.binary_cross_entropy_with_logits
-            cls_loss = cls_loss_func(pred_obj_cls, cls_labels)
+            if self.config.USE_FOCAL_LOSS:
+                cls_loss_func = sigmoid_focal_loss
+            else:
+                cls_loss_func = F.binary_cross_entropy_with_logits
+
+            cls_loss = cls_loss_func(pred_obj_cls, cls_labels).mean()
 
         if self.config.USE_SEM_REFINEMENT:
             segment_label = batch["semantic_label"].cuda().long() - 1
@@ -176,8 +181,10 @@ class PointNet2Classification(nn.Module):
             if not self.config.USE_SEM_WEIGHTS:
                 sem_weights = None
 
-            sem_loss = sem_loss_func(pred_sem_cls, segment_label, weight=sem_weights)
-        return 3 * cls_loss + sem_loss
+            # only compute loss if there are positive segments
+            if len(inds):
+                sem_loss = sem_loss_func(pred_sem_cls, segment_label, weight=sem_weights)
+        return cls_loss + sem_loss
 
 
 class Config:
