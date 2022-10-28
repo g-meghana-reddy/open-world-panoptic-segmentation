@@ -18,6 +18,38 @@ from utils import *
 
 NUM_POINTS = 1024
 
+class Config:
+    # Learning rate parameters
+    LR = 2e-3
+    LR_CLIP = 0.00001
+    LR_DECAY = 0.5
+    DECAY_STEP_LIST = [50, 100, 150, 200, 250, 300]
+
+    # Model config
+    USE_SEG_CLASSIFIER = True
+    USE_SEM_FEATURES = False
+    USE_SEM_REFINEMENT = False
+    USE_SEM_WEIGHTS = False
+    NUM_THINGS = 8
+
+    # Optimizer parameters
+    WEIGHT_DECAY = 0.0
+
+    # batchnorm parameters
+    BN_MOMENTUM = 0.9
+    BN_DECAY = 0.5
+    BNM_CLIP = 0.01
+    BN_DECAY_STEP_LIST = [50, 100, 150, 200, 250, 300]
+
+    GRAD_NORM_CLIP = 1.0
+    FG_THRESH = 0.5
+
+    EPOCHS = 200
+    BATCH_SIZE = 512
+    N_POINTS = 1024
+    USE_WANDB = True
+
+
 # Use the segment classifier to assign each segment a score
 def evaluate(model, points, features=None):
     num_points_in_segment = points.shape[0]
@@ -29,22 +61,29 @@ def evaluate(model, points, features=None):
     if num_points_in_segment > NUM_POINTS:
         chosen_idxs = np.random.choice(np.arange(num_points_in_segment), NUM_POINTS, replace=False)
     else:
+        chosen_idxs = np.arange(0, num_points_in_segment, dtype=np.int32)
         if num_points_in_segment < NUM_POINTS:
-            residual = NUM_POINTS - num_points_in_segment
-            points = np.concatenate([points, np.zeros((residual, points.shape[1]))])
-            if features is not None:
-                features = np.concatenate([features, np.zeros((residual, features.shape[1]))])
-        chosen_idxs = np.arange(0, NUM_POINTS, dtype=np.int32)
+            extra_idxs = np.random.choice(chosen_idxs, NUM_POINTS - len(chosen_idxs), replace=True)
+            chosen_idxs = np.concatenate([chosen_idxs, extra_idxs], axis=0)
+    
     np.random.shuffle(chosen_idxs)
-
     points = torch.from_numpy(points[chosen_idxs]).cuda().float()
+
+    _mean = torch.mean(points, axis=0)
+    _theta = torch.atan2(_mean[1], _mean[0]).cpu().numpy()
+    _rot = torch.from_numpy(np.array([[ np.cos(_theta), np.sin(_theta)],
+                        [-np.sin(_theta), np.cos(_theta)]])).cuda().float()
+    
+    points[:,:2] = torch.matmul(_rot, (points[:,:2] - _mean[None,:2]).T).T
+
     if features is not None:
         features = torch.from_numpy(features[chosen_idxs]).cuda().float()
         points = torch.cat([points, features], dim=-1)
 
     # get segment score using classifier
     with torch.no_grad():
-        score = model(points[None]).sigmoid().cpu().numpy().item()
+        score = model(points[None])[0].sigmoid().cpu().numpy().item()
+    
     return score
 
     
@@ -122,10 +161,10 @@ def segment(model, id_, eps_list, cloud, features=None, original_indices=None, a
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=2)
+    parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=-1)
     parser.add_argument("-d", "--dataset", help="Dataset", default='semantic-kitti')
     parser.add_argument("-s", "--sequence", help="Sequence", type=int, default=8)
-    parser.add_argument("-o", "--objsem_folder", help="Folder with object and semantic predictions", type=str, required=True)
+    parser.add_argument("-o", "--objsem_folder", help="Folder with object and semantic predictions", type=str, default='../test/4DPLS_original_params_original_repo_nframes1_1e-3_softmax/val_probs')
     parser.add_argument("-sd", "--save_dir", help="Save directory", type=str, default='test/LOSP')
     parser.add_argument("--ckpt", help="Checkpoint to load for segment classifier", type=str, default=None)
     parser.add_argument("--use-sem-features", help="Whether to use semantic features in classifier", action="store_true")
@@ -150,11 +189,13 @@ if __name__ == '__main__':
         args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/sem_xyz/checkpoints/epoch_200.pth"
     else:
         in_channels = 0
-        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz/checkpoints/epoch_200.pth"
+        args.ckpt = "/project_data/ramanan/mganesin/4D-PLS/results/checkpoints/xyz_mean/checkpoints/epoch_200.pth"
 
     # instantiate the segment classifier
+    cfg = Config()
+
     print("Loading segment classifier from checkpoint")
-    classifier = PointNet2Classification(in_channels).cuda()
+    classifier = PointNet2Classification(cfg, in_channels).cuda()
     ckpt = torch.load(args.ckpt)
     classifier.load_state_dict(ckpt["model_state"])
     classifier.eval()
