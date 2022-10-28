@@ -58,7 +58,7 @@ class Config:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Arg parser")
-    parser.add_argument('--exp', type=str, default="xyz")
+    parser.add_argument('--exp', type=str, default="xyz_mean_focal_loss")
     parser.add_argument('--ckpt', type=str, default=None)
     parser.add_argument('-e', '--epochs', type=int, default=200)
     parser.add_argument('-b', '--batch_size', type=int, default=512)
@@ -101,7 +101,7 @@ def train_one_iter(cfg, model, batch, optimizer, sem_weights=None):
     model.train()
     
     optimizer.zero_grad()
-    xyz = batch["first_frame_xyz"].cuda().float()
+    xyz = batch["xyz"].cuda().float()
     cls_labels = batch["gt_label"].cuda().float()
 
     # TODO: use this later for segment refinement
@@ -182,7 +182,7 @@ def validate(cfg, model, val_loader, sem_weights=None):
     for i, batch in tqdm.tqdm(enumerate(val_loader, 0), total=len(val_loader), leave=False, desc='val'):
         optimizer.zero_grad()
 
-        xyz = batch["first_frame_xyz"].cuda().float()
+        xyz = batch["xyz"].cuda().float()
         cls_labels = batch["gt_label"].cuda().float()
 
         sem_label = batch["semantic_label"].cuda().long() - 1
