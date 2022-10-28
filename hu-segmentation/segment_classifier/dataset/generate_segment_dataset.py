@@ -251,15 +251,43 @@ def generate_segments_per_scan(scan_file, frame_emb_preds, frame_pred_labels, fr
     # thing classes: [1,2,3,4,5,6,7,8]
     # things_mask = np.where(np.logical_and(frame_gt_labels > 0 , frame_gt_labels < 9))
     things_mask = np.where(np.logical_and(frame_pred_labels > 0 , frame_pred_labels < 9))
+    gt_mask = np.where(np.logical_and(frame_gt_labels > 0 , frame_gt_labels < 9))
+
 
     # generate all labels for things only
     first_frame_coordinates = frame_xyz[things_mask]
     pts_velo_cs_objects = pts_velo_cs[things_mask]
     pts_indexes_objects = pts_indexes[things_mask]
     pts_embeddings_objects = frame_emb_preds[things_mask]
-    gt_instance_ids_objects = frame_gt_ins_labels[things_mask]
-    gt_instance_indexes_objects = np.arange(frame_gt_ins_labels.shape[0])[things_mask]
     gt_semantic_labels = frame_gt_labels[things_mask]
+
+    gt_file = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/08/labels/000000.label'
+    config = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti-orig.yaml"
+    with open(config, 'r') as stream:
+        doc = yaml.safe_load(stream)
+        all_labels = doc['labels']
+        learning_map_inv = doc['learning_map_inv']
+        learning_map_doc = doc['learning_map']
+        learning_map = np.zeros((np.max([k for k in learning_map_doc.keys()]) + 1), dtype=np.int32)
+        for k, v in learning_map_doc.items():
+            learning_map[k] = v
+
+        inv_learning_map = np.zeros((np.max([k for k in learning_map_inv.keys()]) + 1), 
+                            dtype=np.int32)
+        for k, v in learning_map_inv.items():
+            inv_learning_map[k] = v
+
+    gt_label = np.fromfile(gt_file, dtype=np.int32)
+    sem_gt = learning_map[gt_label & 0xFFFF]
+    ins_gt = gt_label >> 16
+    gt_mask = np.where(np.logical_and(sem_gt > 0 , sem_gt < 9))
+    gt_instance_ids = ins_gt[gt_mask]
+    gt_instance_indexes = np.arange(ins_gt.shape[0])[gt_mask]
+    print(gt_mask[0].shape)
+
+
+    gt_instance_ids_objects = ins_gt[gt_mask]
+    gt_instance_indexes_objects = np.arange(ins_gt.shape[0])[gt_mask]
 
     if len(pts_velo_cs_objects) < 1:
         return
@@ -282,6 +310,7 @@ def generate_segments_per_scan(scan_file, frame_emb_preds, frame_pred_labels, fr
     # Traverse the computed hierarchical tree to store the segments
     #********************************************************************
     segment_tree_traverse(segment_tree, pts_embeddings_objects, pts_velo_cs_objects, gt_semantic_labels, first_frame_coordinates, filepath, 0, set())
+    
     return
 
 if __name__ == '__main__':
