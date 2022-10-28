@@ -59,7 +59,8 @@ def generate_segments_per_scan(scan_file, frame_emb_preds, frame_pred_labels, fr
     gt_instance_indexes_objects = np.arange(frame_gt_ins_labels.shape[0])[gt_things_mask]
     gt_semantic_labels = frame_gt_labels[gt_things_mask]
 
-    gt_file = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/08/labels/000000.label'
+    file = scan_file.split('.')[0]
+    gt_file = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/08/labels/{}.label'.format(file)
     config = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti-orig.yaml"
     with open(config, 'r') as stream:
         doc = yaml.safe_load(stream)
@@ -81,9 +82,6 @@ def generate_segments_per_scan(scan_file, frame_emb_preds, frame_pred_labels, fr
     gt_mask = np.where(np.logical_and(sem_gt > 0 , sem_gt < 9))
     gt_instance_ids = ins_gt[gt_mask]
     gt_instance_indexes = np.arange(ins_gt.shape[0])[gt_mask]
-    print(gt_mask[0].shape)
-
-
     gt_instance_ids_objects = ins_gt[gt_mask]
     gt_instance_indexes_objects = np.arange(ins_gt.shape[0])[gt_mask]
 
