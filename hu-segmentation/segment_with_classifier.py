@@ -43,8 +43,15 @@ def evaluate(model, points, features=None):
             extra_idxs = np.random.choice(chosen_idxs, NUM_POINTS - len(chosen_idxs), replace=True)
             chosen_idxs = np.concatenate([chosen_idxs, extra_idxs], axis=0)
     np.random.shuffle(chosen_idxs)
-
     points = torch.from_numpy(points[chosen_idxs]).cuda().float()
+
+    _mean = torch.mean(points, axis=0)
+    _theta = torch.atan2(_mean[1], _mean[0]).cpu().numpy()
+    _rot = torch.from_numpy(np.array([[ np.cos(_theta), np.sin(_theta)],
+                        [-np.sin(_theta), np.cos(_theta)]])).cuda().float()
+    
+    points[:,:2] = torch.matmul(_rot, (points[:,:2] - _mean[None,:2]).T).T
+
     if features is not None:
         features = torch.from_numpy(features[chosen_idxs]).cuda().float()
         points = torch.cat([points, features], dim=-1)
@@ -136,7 +143,7 @@ def segment(model, id_, eps_list, cloud, features=None, original_indices=None, a
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=2)
+    parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=-1)
     parser.add_argument("-d", "--dataset", help="Dataset", default='semantic-kitti')
     parser.add_argument("-s", "--sequence", help="Sequence", type=int, default=8)
     parser.add_argument("-o", "--objsem_folder", help="Folder with object and semantic predictions", type=str, default="/project_data/ramanan/mganesin/4D-PLS/test/4DPLS_original_params_original_repo_nframes1_1e-3_softmax/val_probs")
@@ -168,11 +175,12 @@ if __name__ == '__main__':
         args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/sem_xyz/checkpoints/epoch_200.pth"
     else:
         in_channels = 0
-        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz/checkpoints/epoch_200.pth"
+        args.ckpt = "/project_data/ramanan/mganesin/4D-PLS/results/checkpoints/xyz_mean/checkpoints/epoch_200.pth"
 
     # instantiate the segment classifier
-    print("Loading segment classifier from checkpoint")
     cfg = Config()
+
+    print("Loading segment classifier from checkpoint")
     classifier = PointNet2Classification(cfg, in_channels).cuda()
     ckpt = torch.load(args.ckpt)
     classifier.load_state_dict(ckpt["model_state"])

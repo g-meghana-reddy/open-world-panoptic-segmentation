@@ -160,7 +160,6 @@ class PointNet2Classification(nn.Module):
                 cls_loss_func = sigmoid_focal_loss
             else:
                 cls_loss_func = F.binary_cross_entropy_with_logits
-
             cls_loss = cls_loss_func(pred_obj_cls, cls_labels).mean()
 
         if self.config.USE_SEM_REFINEMENT:
