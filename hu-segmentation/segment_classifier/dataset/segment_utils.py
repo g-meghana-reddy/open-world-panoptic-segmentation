@@ -1,18 +1,20 @@
+import os
 import numpy as np
 from sklearn.cluster import DBSCAN
 
 
 class Segment():
     '''Segment node of the tree.'''
-    def __init__(self, indices, score):
+    def __init__(self, indices, score, label=None):
         self.indices = indices
         self.score = score
+        self.label = label
 
 class TreeSegment():
     '''Tree of segments as nodes.'''
-    def __init__(self, indices, score):
+    def __init__(self, indices, score, label=None):
         self.child_segments = None
-        self.curr_segment_data = Segment(indices, score)
+        self.curr_segment_data = Segment(indices, score, label)
 
 def load_vertex(file):
     '''Load the vertices from the velodyne files.'''
@@ -20,7 +22,13 @@ def load_vertex(file):
     frame_points = frame_points.reshape((-1, 4))
     return frame_points[:,:3]
 
-def evaluate_iou_based_objectness(pred_inds, pts_indexes_objects, gt_instance_indexes, gt_instance_ids):
+def load_paths(folder):
+  paths = [os.path.join(dp, f) for dp, dn, fn in os.walk(
+    os.path.expanduser(folder)) for f in fn]
+  paths.sort()
+  return np.array(paths)
+
+def evaluate_iou_based_objectness(pred_inds, pts_indexes_objects, gt_instance_indexes, gt_instance_ids, gt_semantic_labels):
     '''Scoring based on IoU with the GT instances.'''
     # predictions
     pred_counts = pred_inds.shape[0]
@@ -32,21 +40,22 @@ def evaluate_iou_based_objectness(pred_inds, pts_indexes_objects, gt_instance_in
 
     unique_gt_ids, unique_gt_counts = np.unique(gt_inst_ids, return_counts = True)
     
-    ious = []
+    ious, labels = [], []
     for idx, gt_ins in enumerate(unique_gt_ids):
         gt_ind = np.where(gt_inst_ids == gt_ins)
+        label = np.bincount(gt_semantic_labels[gt_ind]).argmax()
         intersections = len(set(pred_indices) & set(gt_instance_indexes[gt_ind]))
         gt_counts = unique_gt_counts[idx]
         union = gt_counts + pred_counts - intersections
         iou = intersections / union
         ious.append(iou)
+        labels.append(label)
 
-    ious = np.array(ious)
-    max_iou = np.max(ious)
-    
-    return max_iou
+    ious, labels = np.array(ious), np.array(labels)
+    max_idx = np.argmax(ious)
+    return ious[max_idx], labels[max_idx]
 
-def compute_hierarchical_tree(eps_list, points_3d, pts_indexes_objects, gt_instance_indexes, gt_instance_ids, original_indices= None):
+def compute_hierarchical_tree(eps_list, points_3d, pts_indexes_objects, gt_instance_indexes, gt_instance_ids, gt_semantic_labels, original_indices= None):
     '''We compute segments from hierarchical tree and compute 
         the objectness scores to perform tree cut.'''
     
@@ -69,15 +78,15 @@ def compute_hierarchical_tree(eps_list, points_3d, pts_indexes_objects, gt_insta
     segments = []
     for unique_label in np.unique(labels):
         inds = original_indices[np.flatnonzero(labels == unique_label)]
-        score = evaluate_iou_based_objectness(inds, pts_indexes_objects, gt_instance_indexes, gt_instance_ids)
-        segment = TreeSegment(inds, score)
-        segment.child_segments = compute_hierarchical_tree(eps_list[1:], points_3d, pts_indexes_objects, gt_instance_indexes, gt_instance_ids, inds)
+        score, label = evaluate_iou_based_objectness(inds, pts_indexes_objects, gt_instance_indexes, gt_instance_ids, gt_semantic_labels)
+        segment = TreeSegment(inds, score, label)
+        segment.child_segments = compute_hierarchical_tree(eps_list[1:], points_3d, pts_indexes_objects, gt_instance_indexes, gt_instance_ids, gt_semantic_labels, inds)
         segments.append(segment)
 
     return segments
 
 
-def segment_tree_traverse(segment_tree, pts_embeddings_objects, pts_velo_cs_objects, gt_semantic_labels, first_frame_coordinates, filepath, segment_index, visited_indices):
+def segment_tree_traverse(segment_tree, pts_embeddings_objects, pts_velo_cs_objects, gt_semantic_labels, filepath, segment_index, visited_indices, first_frame_coordinates=None):
     '''Traversal of the hierarchical tree.'''
     if len(segment_tree.curr_segment_data.indices) == 0:
         return segment_index
@@ -98,29 +107,40 @@ def segment_tree_traverse(segment_tree, pts_embeddings_objects, pts_velo_cs_obje
                 filename = filepath + '_' + '{:07d}.npz'.format(segment_index)
 
                 name = filename.split('/')[-1][:-5]
-                first_frame_xyz = first_frame_coordinates[segment_tree.curr_segment_data.indices]
                 indices = segment_tree.curr_segment_data.indices
                 objectness = segment_tree.curr_segment_data.score
                 xyz = pts_velo_cs_objects[segment_tree.curr_segment_data.indices]
                 semantic_features = pts_embeddings_objects[segment_tree.curr_segment_data.indices]
-                semantic_label = int(np.bincount(gt_semantic_labels[segment_tree.curr_segment_data.indices].astype(int)).argmax())
-
-                np.savez(
-                    filename,
-                    name=name,
-                    indices=indices,
-                    objectness=objectness,
-                    xyz=xyz,
-                    first_frame_xyz=first_frame_xyz,
-                    semantic_features=semantic_features,
-                    gt_label=gt_label,
-                    semantic_label=semantic_label,
-                )
+                semantic_label = int(segment_tree.curr_segment_data.label)
+                if first_frame_coordinates is not None:
+                    first_frame_xyz = first_frame_coordinates[segment_tree.curr_segment_data.indices]
+                    np.savez(
+                        filename,
+                        name=name,
+                        indices=indices,
+                        objectness=objectness,
+                        xyz=xyz,
+                        first_frame_xyz=first_frame_xyz,
+                        semantic_features=semantic_features,
+                        gt_label=gt_label,
+                        semantic_label=semantic_label,
+                    )
+                else:
+                    np.savez(
+                        filename,
+                        name=name,
+                        indices=indices,
+                        objectness=objectness,
+                        xyz=xyz,
+                        semantic_features=semantic_features,
+                        gt_label=gt_label,
+                        semantic_label=semantic_label,
+                    )
 
                 segment_index += 1
                 visited_indices.add(tuple(indices.tolist()))
 
     for segment in segment_tree.child_segments:  
-        segment_index = segment_tree_traverse(segment, pts_embeddings_objects, pts_velo_cs_objects, gt_semantic_labels, first_frame_coordinates, filepath, segment_index, visited_indices)
+        segment_index = segment_tree_traverse(segment, pts_embeddings_objects, pts_velo_cs_objects, gt_semantic_labels, filepath, segment_index, visited_indices, first_frame_coordinates=first_frame_coordinates)
 
     return segment_index

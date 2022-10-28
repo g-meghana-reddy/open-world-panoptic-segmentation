@@ -35,6 +35,9 @@ class Config:
     USE_SEM_WEIGHTS = False
     NUM_THINGS = 8
 
+    # Loss config
+    USE_FOCAL_LOSS = False
+
     # Optimizer parameters
     WEIGHT_DECAY = 0.0
 
@@ -174,6 +177,7 @@ def validate(cfg, model, val_loader, sem_weights=None):
     model.eval()
     
     total_loss = 0.
+    num_batches, corr_pred = 0, 0
     cls_gt, cls_pred, sem_gt, sem_pred = [], [], [], []
     for i, batch in tqdm.tqdm(enumerate(val_loader, 0), total=len(val_loader), leave=False, desc='val'):
         optimizer.zero_grad()
@@ -202,13 +206,21 @@ def validate(cfg, model, val_loader, sem_weights=None):
             cls_gt.extend(cls_labels.long().cpu().numpy())
             cls_pred.extend(cls_pred_label.detach().cpu().numpy())
 
+            pos_inds = cls_labels == 1
+            if pos_inds.sum() != 0:
+                corr_pred += cls_pred_label[pos_inds].sum()/pos_inds.sum()
+                num_batches +=1
+
         if cfg.USE_SEM_REFINEMENT:
             sem_pred_label = torch.argmax(pred_sem, axis=-1).long()
             sem_gt.extend(sem_label.long().cpu().numpy())
             sem_pred.extend(sem_pred_label.detach().cpu().numpy())
 
     # compute validation metrics
-    metric_dict = {'val/loss': total_loss}
+    metric_dict = {
+        'val/loss': total_loss,
+        'val/positives_accuracy': corr_pred / num_batches
+    }
     if cfg.USE_SEG_CLASSIFIER:
         add_metrics(metric_dict, cls_gt, cls_pred, "classifier")
 

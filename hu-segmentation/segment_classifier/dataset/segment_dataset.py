@@ -18,7 +18,7 @@ class SegmentDataset(Dataset):
         self.random_jitter = False
         self.random_flip = False
         self.random_shuffle = True
-        self.rotate_to_center = True
+        self.rotate_to_center = False
 
         if split == "training":
             self.sequences = ["{:02d}".format(i) for i in range(11) if i != 8]
