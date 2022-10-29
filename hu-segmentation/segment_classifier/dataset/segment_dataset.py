@@ -90,15 +90,6 @@ class SegmentDataset(Dataset):
                 extra_idxs = np.random.choice(
                     chosen_idxs, self.n_points - len(chosen_idxs), replace=True)
                 chosen_idxs = np.concatenate([chosen_idxs, extra_idxs], axis=0)
-                # residual = self.n_points - num_points
-                # segment_data["indices"] = np.concatenate([
-                #     segment_data["indices"], -1 * np.ones(residual)])
-                # segment_data["xyz"] = np.vstack([
-                #     segment_data["xyz"], np.zeros((residual, 3))
-                # ])
-                # segment_data["semantic_features"] = np.vstack([
-                #     segment_data["semantic_features"], np.zeros((residual, 256))
-                # ])
 
         # Data augmentation
         if self.random_shuffle:
