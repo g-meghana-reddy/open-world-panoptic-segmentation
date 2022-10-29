@@ -252,8 +252,8 @@ def generate_segments_per_scan(scan_file, frame_emb_preds, frame_pred_labels, fr
     # Compute the things mask and compute labels, xyz points accordingly
     #********************************************************************
     # thing classes: [1,2,3,4,5,6,7,8]
-    gt_things_mask = np.where(np.logical_and(frame_gt_labels > 0 , frame_gt_labels < 9))
-    things_mask = np.where(np.logical_and(frame_pred_labels > 0 , frame_pred_labels < 9))
+    gt_things_mask = np.where(np.logical_and(frame_gt_labels > 0, frame_gt_labels < 9))
+    things_mask = np.where(np.logical_and(frame_pred_labels > 0, frame_pred_labels < 9))
 
     # generate all labels for things only
     if frame_xyz is not None:
