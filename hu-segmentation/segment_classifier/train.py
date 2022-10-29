@@ -9,7 +9,6 @@ from sklearn.metrics import (
 import torch
 from torch import optim
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
 import torch.optim.lr_scheduler as lr_sched
 from torch.utils.data import WeightedRandomSampler
@@ -53,7 +52,7 @@ class Config:
     EPOCHS = 200
     BATCH_SIZE = 512
     N_POINTS = 1024
-    USE_WANDB = True
+    USE_WANDB = False
 
 
 def parse_args():
@@ -99,14 +98,9 @@ def create_scheduler(cfg, model, optimizer, last_epoch):
 
 def train_one_iter(cfg, model, batch, optimizer, sem_weights=None):
     model.train()
-    
     optimizer.zero_grad()
+
     xyz = batch["xyz"].cuda().float()
-    cls_labels = batch["gt_label"].cuda().float()
-
-    # TODO: use this later for segment refinement
-    # segm_label = batch["semantic_label"].cuda().long()
-
     if cfg.USE_SEM_FEATURES:
         features = batch["semantic_features"].cuda().float()
         pts_input = torch.cat([xyz, features], dim=-1)
@@ -175,7 +169,7 @@ def train(cfg, model, optimizer, train_loader, sem_weights=None, val_loader=None
 
 def validate(cfg, model, val_loader, sem_weights=None):
     model.eval()
-    
+
     total_loss = 0.
     num_batches, corr_pred = 0, 0
     cls_gt, cls_pred, sem_gt, sem_pred = [], [], [], []
@@ -184,7 +178,6 @@ def validate(cfg, model, val_loader, sem_weights=None):
 
         xyz = batch["xyz"].cuda().float()
         cls_labels = batch["gt_label"].cuda().float()
-
         sem_label = batch["semantic_label"].cuda().long() - 1
 
         if cfg.USE_SEM_FEATURES:
@@ -208,8 +201,8 @@ def validate(cfg, model, val_loader, sem_weights=None):
 
             pos_inds = cls_labels == 1
             if pos_inds.sum() != 0:
-                corr_pred += cls_pred_label[pos_inds].sum()/pos_inds.sum()
-                num_batches +=1
+                corr_pred += cls_pred_label[pos_inds].sum() / pos_inds.sum()
+                num_batches += 1
 
         if cfg.USE_SEM_REFINEMENT:
             sem_pred_label = torch.argmax(pred_sem, axis=-1).long()
