@@ -35,7 +35,7 @@ class Config:
     NUM_THINGS = 8
 
     # Loss config
-    USE_FOCAL_LOSS = FALSE
+    USE_FOCAL_LOSS = False
 
     # Optimizer parameters
     WEIGHT_DECAY = 0.0
