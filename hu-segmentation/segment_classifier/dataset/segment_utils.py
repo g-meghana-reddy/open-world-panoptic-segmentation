@@ -91,21 +91,20 @@ def segment_tree_traverse(segment_tree, pts_embeddings_objects, pts_velo_cs_obje
     if len(segment_tree.curr_segment_data.indices) == 0:
         return segment_index
 
-    if len(segment_tree.curr_segment_data.indices) > 100:
-        if segment_tree.curr_segment_data.score < 0.2 or segment_tree.curr_segment_data.score >= 0.5 :
+    if len(segment_tree.curr_segment_data.indices) > 25:
+        if segment_tree.curr_segment_data.score < 0.3 or segment_tree.curr_segment_data.score >= 0.7:
 
             if tuple(segment_tree.curr_segment_data.indices.tolist()) not in visited_indices:
                 # print("----------------------------------------------")
                 # print("Segment indices: ", segment_tree.curr_segment_data.indices)
                 # print("Segment score: ", segment_tree.curr_segment_data.score)
                 # print("----------------------------------------------")
-                if segment_tree.curr_segment_data.score < 0.2:
+                if segment_tree.curr_segment_data.score < 0.3:
                     gt_label = 0
                 else:
                     gt_label = 1
 
                 filename = filepath + '_' + '{:07d}.npz'.format(segment_index)
-
                 name = filename.split('/')[-1][:-5]
                 indices = segment_tree.curr_segment_data.indices
                 objectness = segment_tree.curr_segment_data.score
