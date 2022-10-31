@@ -18,7 +18,7 @@ class SegmentDataset(Dataset):
         self.random_jitter = False
         self.random_flip = False
         self.random_shuffle = True
-        self.rotate_to_center = False
+        self.rotate_to_center = True
 
         if split == "training":
             self.sequences = ["{:02d}".format(i) for i in range(11) if i != 8]
@@ -44,9 +44,9 @@ class SegmentDataset(Dataset):
                     segment_data = dict(np.load(path))
                     if segment_data["gt_label"] == 1:
                         pos_indices.append(idx)
+                        sem_class_counts[segment_data["semantic_label"]] += 1
                     else:
                         neg_indices.append(idx)
-                    sem_class_counts[segment_data["semantic_label"]] += 1
                 np.savez(
                     indices_file,
                     pos_indices=pos_indices,
@@ -103,7 +103,7 @@ class SegmentDataset(Dataset):
         segment_data["xyz"] = self.points_augmentation(segment_data["xyz"])
 
         return segment_data
-    
+
     def points_augmentation(self, points):
  
         # standardization: zero-mean

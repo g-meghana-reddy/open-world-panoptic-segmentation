@@ -34,6 +34,12 @@ class Config:
 def evaluate(model, points, features=None):
     num_points_in_segment = points.shape[0]
 
+    # if num_points_in_segment < 5:
+    #     sem = None
+    #     if model.config.USE_SEM_REFINEMENT:
+    #         sem = 0
+    #     return 0., sem
+
     # TODO: what to do about n_points?
     if num_points_in_segment > NUM_POINTS:
         chosen_idxs = np.random.choice(np.arange(num_points_in_segment), NUM_POINTS, replace=False)
@@ -169,17 +175,23 @@ if __name__ == '__main__':
         raise ValueError('Unknown task set: {}'.format(args.task_set))
 
     if args.use_sem_refinement:
-        in_channels = 0 # 256
-        args.ckpt = "/project_data/ramanan/mganesin/4D-PLS/hu-segmentation/segment_classifier/results/sem_obj/checkpoints/epoch_100.pth"
+        in_channels = 256 # 0
+        # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats_sem_refinement_weighted/checkpoints/epoch_200.pth"
+        # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/sem_feats_only_focal_sem_refinement_weighted_project_input_1024/checkpoints/epoch_200.pth"
+        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats_sem_reifnement_weighted_new_indices/checkpoints/epoch_200.pth"
+        # args.ckpt = "/project_data/ramanan/mganesin/4D-PLS/results/checkpoints/xyz_sem_mean_refine/checkpoints/epoch_200.pth"
     elif args.use_sem_features:
         in_channels = 256
-        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/sem_xyz/checkpoints/epoch_200.pth"
+        # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/sem_xyz/checkpoints/epoch_200.pth"
+        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats/checkpoints/epoch_50.pth"
     else:
         in_channels = 0
-        args.ckpt = "/project_data/ramanan/mganesin/4D-PLS/results/checkpoints/xyz_mean/checkpoints/epoch_200.pth"
+        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal/checkpoints/epoch_200.pth"
 
     # instantiate the segment classifier
     cfg = Config()
+    cfg.USE_SEM_FEATURES = args.use_sem_features
+    cfg.USE_SEM_REFINEMENT = args.use_sem_refinement
 
     print("Loading segment classifier from checkpoint")
     cfg = Config()
@@ -324,13 +336,13 @@ if __name__ == '__main__':
 
         # mapped_flat_indices = pts_indexes_objects
         flat_scores = flatten_scores(scores)
-        if args.use_sem_features:
+        if args.use_sem_refinement:
             flat_sem_labels = flatten_labels(sem_labels)
 
         new_instance = instances.max() + 1
         for id_, indices in enumerate(mapped_indices):
             instances[indices] = new_instance + id_
-            if args.use_sem_features:
+            if args.use_sem_refinement:
                 labels[indices] = flat_sem_labels[id_]
 
         # Create .label files using the updated instance and semantic labels

@@ -10,6 +10,7 @@ import model.pytorch_utils as pt_utils
 
 USE_BN = False
 DP_RATIO = 0.0
+# XYZ_UP_LAYER = [1024, 256]
 XYZ_UP_LAYER = [128, 128]
 
 NUM_POINTS = 512
@@ -46,8 +47,8 @@ class PointNet2Classification(nn.Module):
         channel_in = input_channels
 
         # project XYZ into higher dimension
-        self.rcnn_input_channel = 3 + channel_in
-        self.xyz_up_layer = pt_utils.SharedMLP([self.rcnn_input_channel] + XYZ_UP_LAYER,
+        input_channel = 3 + channel_in
+        self.xyz_up_layer = pt_utils.SharedMLP([input_channel] + XYZ_UP_LAYER,
                                                 bn=USE_BN)
         # c_out = XYZ_UP_LAYER[-1]
         # self.merge_down_layer = pt_utils.SharedMLP([c_out * 2, c_out], bn=USE_BN)
@@ -117,7 +118,7 @@ class PointNet2Classification(nn.Module):
         features = pc[..., 3:].transpose(1, 2).contiguous() if pc.size(-1) > 3 else None
 
         return xyz, features
-    
+
     def forward(self, pointcloud: torch.cuda.FloatTensor):
         """
         Run forward pass
@@ -131,15 +132,9 @@ class PointNet2Classification(nn.Module):
         """
         xyz, features = self._break_up_pc(pointcloud)
 
-        # xyz_input = xyz[..., 0:self.rcnn_input_channel].transpose(1, 2).unsqueeze(dim=3)
-        # xyz_feature = self.xyz_up_layer(xyz_input)
-
-        # rpn_feature = xyz[..., self.rcnn_input_channel:].transpose(1, 2).unsqueeze(dim=3)
-
-        # merged_feature = torch.cat((xyz_feature, rpn_feature), dim=1)
-        # merged_feature = self.merge_down_layer(merged_feature)
-        # # l_xyz, l_features = [xyz], [merged_feature.squeeze(dim=3)]
-        # xyz, features = xyz, merged_feature.squeeze(dim=3)
+        # xyz_input = torch.cat((xyz, features.transpose(1, 2)), dim=-1)
+        # xyz_feature = self.xyz_up_layer(xyz_input.transpose(1, 2).unsqueeze(dim=3))
+        # xyz, features = xyz, xyz_feature.squeeze(dim=3)
 
         for module in self.SA_modules:
             xyz, features = module(xyz, features)
@@ -165,7 +160,10 @@ class PointNet2Classification(nn.Module):
 
         if self.config.USE_SEM_REFINEMENT:
             segment_label = batch["semantic_label"].cuda().long() - 1
-            sem_loss_func = F.cross_entropy
+            if self.config.USE_FOCAL_LOSS_SEG:
+                sem_loss_func = self.focal_loss
+            else:
+                sem_loss_func = F.cross_entropy
 
             # backpropagate only for valid segments
             if train:
@@ -183,8 +181,74 @@ class PointNet2Classification(nn.Module):
 
             # only compute loss if there are positive segments
             if len(inds):
-                sem_loss = sem_loss_func(pred_sem_cls, segment_label, weight=sem_weights)
-        return cls_loss + sem_loss
+                if self.config.USE_FOCAL_LOSS_SEG:
+                    sem_loss = sem_loss_func(pred_sem_cls, segment_label, reduction="mean")
+                else:
+                    sem_loss = sem_loss_func(pred_sem_cls, segment_label, weight=sem_weights)
+        return cls_loss + 10. * sem_loss
+    
+    # Adapted from: https://kornia.readthedocs.io/en/latest/_modules/kornia/losses/focal.html
+    def focal_loss(
+        self,
+        input,
+        target,
+        alpha = 0.5,
+        gamma = 2.0,
+        reduction = 'none',
+    ):
+        """
+        According to :cite:`lin2018focal`, the Focal loss is computed as follows:
+
+        .. math::
+
+            \text{FL}(p_t) = -\alpha_t (1 - p_t)^{\gamma} \, \text{log}(p_t)
+
+        Where:
+        - :math:`p_t` is the model's estimated probability for each class.
+
+        Args:
+            input: logits tensor with shape :math:`(N, C, *)` where C = number of classes.
+            target: labels tensor with shape :math:`(N, *)` where each value is :math:`0 ≤ targets[i] ≤ C−1`.
+            alpha: Weighting factor :math:`\alpha \in [0, 1]`.
+            gamma: Focusing parameter :math:`\gamma >= 0`.
+            reduction: Specifies the reduction to apply to the
+            output: ``'none'`` | ``'mean'`` | ``'sum'``. ``'none'``: no reduction
+            will be applied, ``'mean'``: the sum of the output will be divided by
+            the number of elements in the output, ``'sum'``: the output will be
+            summed.
+
+        Return:
+            the computed loss.
+
+        Example:
+            >>> N = 5  # num_classes
+            >>> input = torch.randn(1, N, 3, 5, requires_grad=True)
+            >>> target = torch.empty(1, 3, 5, dtype=torch.long).random_(N)
+            >>> output = focal_loss(input, target, alpha=0.5, gamma=2.0, reduction='mean')
+            >>> output.backward()
+        """
+        # compute softmax over the classes axis
+        input_soft = input.softmax(1)
+        log_input_soft = input.log_softmax(1)
+
+        # create the labels one hot tensor
+        target_one_hot = F.one_hot(target, num_classes=self.config.NUM_THINGS).float()
+
+        # compute the actual focal loss
+        weight = torch.pow(-input_soft + 1.0, gamma)
+
+        focal = -alpha * weight * log_input_soft
+        loss_tmp = torch.einsum('bc...,bc...->b...', (target_one_hot, focal))
+
+        if reduction == 'none':
+            loss = loss_tmp
+        elif reduction == 'mean':
+            loss = torch.mean(loss_tmp)
+        elif reduction == 'sum':
+            loss = torch.sum(loss_tmp)
+        else:
+            raise NotImplementedError(f"Invalid reduction mode: {reduction}")
+        return loss
 
 
 class Config:
