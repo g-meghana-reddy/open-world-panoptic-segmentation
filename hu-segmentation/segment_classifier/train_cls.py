@@ -227,7 +227,7 @@ def add_metrics(metric_dict, gt, pred, split="val"):
         key = "{}/acc_{}".format(split, cls_id)
         metric_dict[key] = cls_acc
 
-    keys = [split + 'overall_acc', split + 'balanced_acc', split + 'f1', split + 'prec', split + 'recall']
+    keys = [split + '/overall_acc', split + '/balanced_acc', split + '/f1', split + '/prec', split + '/recall']
     values = [acc, balanced_acc, f1.item(), prec.item(), recall.item()]
     metric_dict.update(zip(keys, values))
 

@@ -29,11 +29,11 @@ class Config:
     DECAY_STEP_LIST = [50, 100, 150, 200, 250, 300]
 
     # Model config
-    USE_SEM_FEATURES = False
+    USE_SEM_FEATURES = True
     NUM_THINGS = 8
 
     # Loss config
-    USE_FOCAL_LOSS = True
+    USE_FOCAL_LOSS = False
 
     # Optimizer parameters
     WEIGHT_DECAY = 0.0
@@ -50,7 +50,7 @@ class Config:
     EPOCHS = 200
     BATCH_SIZE = 512
     N_POINTS = 1024
-    USE_WANDB = False
+    USE_WANDB = True
 
 
 def parse_args():
@@ -212,7 +212,7 @@ def add_metrics(metric_dict, gt, pred, split="val"):
         key = "{}/acc_{}".format(split, cls_id)
         metric_dict[key] = cls_acc
 
-    keys = [split + 'overall_acc', split + 'balanced_acc', split + 'f1', split + 'prec', split + 'recall']
+    keys = [split + '/overall_acc', split + '/balanced_acc', split + '/f1', split + '/prec', split + '/recall']
     values = [acc, balanced_acc, f1.item(), prec.item(), recall.item()]
     metric_dict.update(zip(keys, values))
 
