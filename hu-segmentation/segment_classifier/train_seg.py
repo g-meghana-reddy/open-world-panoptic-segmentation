@@ -55,7 +55,7 @@ class Config:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Arg parser")
-    parser.add_argument('--exp', type=str, default="xyz_mean_focal_loss_sem_refinement")
+    parser.add_argument('--exp', type=str, default="xyz_mean_second_stage_sem_refinement")
     parser.add_argument('--ckpt', type=str, default=None)
     parser.add_argument('-e', '--epochs', type=int, default=200)
     parser.add_argument('-b', '--batch_size', type=int, default=512)
