@@ -33,32 +33,47 @@ class SegmentDataset(Dataset):
             indices_file = os.path.join(dataset_path, "class_indices.npz")
             if os.path.exists(indices_file):
                 print("Loading precomputed indices")
-                indices = dict(np.load(indices_file))
+                indices = dict(np.load(indices_file, allow_pickle=True))
                 pos_indices, neg_indices = indices["pos_indices"], indices["neg_indices"]
+                sem_label_to_idx = indices["sem_label_to_idx"].item()
                 sem_class_counts = indices["sem_class_counts"]
             else:
                 print("Precomputing indices, one-time only!")
                 pos_indices, neg_indices = [], []
+                sem_label_to_idx = {i: [] for i in range(self.semantic_classes)}
                 sem_class_counts = np.zeros((self.semantic_classes, 1))
                 for idx, path in enumerate(self.paths):
                     segment_data = dict(np.load(path))
+                    sem_label = segment_data["semantic_label"].item()
                     if segment_data["gt_label"] == 1:
                         pos_indices.append(idx)
-                        sem_class_counts[segment_data["semantic_label"]] += 1
+                        sem_label_to_idx[sem_label].append(idx)
+                        sem_class_counts[sem_label] += 1
                     else:
                         neg_indices.append(idx)
+                sem_label_to_idx_arr = np.array(sem_label_to_idx)
                 np.savez(
                     indices_file,
                     pos_indices=pos_indices,
                     neg_indices=neg_indices,
-                    sem_class_counts=sem_class_counts
+                    sem_class_counts=sem_class_counts,
+                    sem_label_to_idx=sem_label_to_idx_arr,
                 )
 
             num_segments = len(self.paths)
-            self.weights = torch.zeros(num_segments)
-            self.weights[pos_indices] = num_segments / len(pos_indices)
-            self.weights[neg_indices] = num_segments / len(neg_indices)
-            self.sem_weights = np.divide(
+            # assign each segment weights using objectness labels 
+            self.cls_weights = torch.zeros(num_segments)
+            self.cls_weights[pos_indices] = num_segments / len(pos_indices)
+            self.cls_weights[neg_indices] = num_segments / len(neg_indices)
+
+            # assign each segment weights using semantic labels
+            self.sem_weights = torch.zeros(num_segments)
+            for cls_id, cls_idxs in sem_label_to_idx.items():
+                if cls_id > 0 and cls_id < self.num_things + 1:
+                    self.sem_weights[cls_idxs] = num_segments / len(cls_idxs)
+            
+            # use counts to get weights for sem loss function
+            self.sem_loss_weights = np.divide(
                 sem_class_counts[1:9].sum(), sem_class_counts[1:9], 
                 out=np.zeros_like(sem_class_counts[1:9]), where=sem_class_counts[1:9] != 0)
 

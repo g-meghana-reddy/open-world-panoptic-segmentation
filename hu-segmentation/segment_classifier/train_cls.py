@@ -1,8 +1,9 @@
 import argparse
 import os
 
+import numpy as np
 from sklearn.metrics import (
-    accuracy_score,
+    confusion_matrix,
     balanced_accuracy_score,
     precision_recall_fscore_support
 )
@@ -28,15 +29,10 @@ class Config:
     DECAY_STEP_LIST = [50, 100, 150, 200, 250, 300]
 
     # Model config
-    USE_SEG_CLASSIFIER = True
     USE_SEM_FEATURES = False
-    USE_SEM_REFINEMENT = False
-    USE_SEM_WEIGHTS = False
-    NUM_THINGS = 8
 
     # Loss config
     USE_FOCAL_LOSS = False
-    USE_FOCAL_LOSS_SEG = True
 
     # Optimizer parameters
     WEIGHT_DECAY = 0.0
@@ -53,7 +49,7 @@ class Config:
     EPOCHS = 200
     BATCH_SIZE = 512
     N_POINTS = 1024
-    USE_WANDB = True
+    USE_WANDB = False
 
 
 def parse_args():
@@ -63,8 +59,6 @@ def parse_args():
     parser.add_argument('-e', '--epochs', type=int, default=200)
     parser.add_argument('-b', '--batch_size', type=int, default=512)
     parser.add_argument('--use-sem-features', action="store_true")
-    parser.add_argument('--use-sem-refinement', action="store_true")
-    parser.add_argument('--use-sem-weights', action="store_true")
     return parser.parse_args()
 
 # __C.TRAIN.MOMS = [0.95, 0.85]
@@ -97,7 +91,7 @@ def create_scheduler(cfg, model, optimizer, last_epoch):
     return lr_scheduler, bnm_scheduler
 
 
-def train_one_iter(cfg, model, batch, optimizer, sem_weights=None):
+def train_one_iter(cfg, model, batch, optimizer):
     model.train()
     optimizer.zero_grad()
 
@@ -108,19 +102,18 @@ def train_one_iter(cfg, model, batch, optimizer, sem_weights=None):
     else:
         pts_input = xyz
 
-    pred_cls, pred_sem = model(pts_input)
-    if pred_cls is not None:
-        pred_cls = pred_cls.view(-1)
-
+    pred_cls = model(pts_input)
+    pred_cls = pred_cls.view(-1)
+    pred_label = (pred_cls.sigmoid() >= cfg.FG_THRESH).long().detach().cpu().numpy()
     pure_model = model.module if isinstance(model, torch.nn.DataParallel) else model
-    loss = pure_model.loss_fn(pred_cls, pred_sem, batch, sem_weights=sem_weights)
+    loss = pure_model.loss_fn(pred_cls, batch)
     loss.backward()
     clip_grad_norm_(model.parameters(), cfg.GRAD_NORM_CLIP)
     optimizer.step()
-    return loss.item()
+    return {"loss": loss.item(), "pred_labels": pred_label}
 
 
-def train(cfg, model, optimizer, train_loader, sem_weights=None, val_loader=None, ckpt_dir='checkpoints/', ckpt_save_interval=5, eval_frequency=5):
+def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkpoints/', ckpt_save_interval=5, eval_frequency=5):
     lr_scheduler, bnm_scheduler = create_scheduler(cfg, model, optimizer, -1)
     it = 0
     with tqdm.trange(0, cfg.EPOCHS, desc='epochs') as tbar, \
@@ -128,7 +121,8 @@ def train(cfg, model, optimizer, train_loader, sem_weights=None, val_loader=None
         for epoch in tbar:
             for idx, batch in enumerate(train_loader):
                 cur_lr = lr_scheduler.get_last_lr()
-                loss = train_one_iter(cfg, model, batch, optimizer, sem_weights)
+                output_dict = train_one_iter(cfg, model, batch, optimizer)
+                loss = output_dict["loss"]
                 it += 1
 
                 # log to console
@@ -147,6 +141,13 @@ def train(cfg, model, optimizer, train_loader, sem_weights=None, val_loader=None
             lr_scheduler.step()
             bnm_scheduler.step(it)
 
+            # log training metrics every epoch
+            if cfg.USE_WANDB:
+                gt = batch["gt_label"].long().cpu().numpy()
+                metric_dict = {}
+                add_metrics(metric_dict, gt, output_dict["pred_labels"], split="train")
+                wandb.log(metric_dict, step=it)
+
             # save trained model
             trained_epoch = epoch + 1
             if trained_epoch % ckpt_save_interval == 0:
@@ -155,11 +156,11 @@ def train(cfg, model, optimizer, train_loader, sem_weights=None, val_loader=None
                     train_utils.checkpoint_state(model, optimizer, trained_epoch, it), filename=ckpt_name,
                 )
 
-             # eval one epoch
+            # eval one epoch
             if epoch % eval_frequency == 0 and val_loader is not None:
                 pbar.close()
                 with torch.no_grad():
-                    metric_dict = validate(cfg, model, val_loader, sem_weights)
+                    metric_dict = validate(cfg, model, val_loader)
                 if cfg.USE_WANDB:
                     wandb.log(metric_dict, step=it)
 
@@ -168,18 +169,17 @@ def train(cfg, model, optimizer, train_loader, sem_weights=None, val_loader=None
             pbar.set_postfix(dict(total_it=it))
 
 
-def validate(cfg, model, val_loader, sem_weights=None):
+def validate(cfg, model, val_loader):
     model.eval()
 
     total_loss = 0.
     num_batches_neg, num_batches_pos, corr_pred_pos, corr_pred_neg = 0, 0, 0, 0
-    cls_gt, cls_pred, sem_gt, sem_pred = [], [], [], []
+    cls_gt, cls_pred = [], []
     for i, batch in tqdm.tqdm(enumerate(val_loader, 0), total=len(val_loader), leave=False, desc='val'):
         optimizer.zero_grad()
 
         xyz = batch["xyz"].cuda().float()
         cls_labels = batch["gt_label"].cuda().float()
-        sem_label = batch["semantic_label"].cuda().long() - 1
 
         if cfg.USE_SEM_FEATURES:
             features = batch["semantic_features"].cuda().float()
@@ -188,58 +188,46 @@ def validate(cfg, model, val_loader, sem_weights=None):
             pts_input = xyz
 
         pred_cls, pred_sem = model(pts_input)
-        if pred_cls is not None:
-            pred_cls = pred_cls.view(-1)
-        
+        pred_cls = pred_cls.view(-1)
         pure_model = model.module if isinstance(model, torch.nn.DataParallel) else model
-        loss = pure_model.loss_fn(pred_cls, pred_sem, batch, sem_weights=sem_weights, train=False)
+        loss = pure_model.loss_fn(pred_cls, pred_sem, batch)
         total_loss += loss.item()
 
-        if cfg.USE_SEG_CLASSIFIER:
-            cls_pred_label = (pred_cls.sigmoid() >= cfg.FG_THRESH).long()
-            cls_gt.extend(cls_labels.long().cpu().numpy())
-            cls_pred.extend(cls_pred_label.detach().cpu().numpy())
+        cls_pred_label = (pred_cls.sigmoid() >= cfg.FG_THRESH).long()
+        cls_gt.extend(cls_labels.long().cpu().numpy())
+        cls_pred.extend(cls_pred_label.detach().cpu().numpy())
 
-            pos_inds = cls_labels == 1
-            neg_inds = cls_labels == 0
-            if pos_inds.sum() != 0:
-                corr_pred_pos += cls_pred_label[pos_inds].sum() / pos_inds.sum()
-                num_batches_pos += 1
-            if neg_inds.sum() != 0:
-                corr_pred_neg += cls_pred_label[neg_inds].sum() / neg_inds.sum()
-                num_batches_neg += 1
-
-        if cfg.USE_SEM_REFINEMENT:
-            sem_pred_label = torch.argmax(pred_sem, axis=-1).long()
-            sem_gt.extend(sem_label.long().cpu().numpy())
-            sem_pred.extend(sem_pred_label.detach().cpu().numpy())
+        pos_inds = cls_labels == 1
+        neg_inds = cls_labels == 0
+        if pos_inds.sum() != 0:
+            corr_pred_pos += cls_pred_label[pos_inds].sum() / pos_inds.sum()
+            num_batches_pos += 1
+        if neg_inds.sum() != 0:
+            corr_pred_neg += cls_pred_label[neg_inds].sum() / neg_inds.sum()
+            num_batches_neg += 1
 
     # compute validation metrics
     metric_dict = {
         'val/loss': total_loss / len(val_loader),
-        'val/classifier/positives_accuracy': corr_pred_pos / num_batches_pos,
-        'val/classifier/negatives_accuracy': 1 - (corr_pred_neg / num_batches_neg)
+        'val/positive_acc': corr_pred_pos / num_batches_pos,
+        'val/negative_acc': 1 - (corr_pred_neg / num_batches_neg)
     }
-    if cfg.USE_SEG_CLASSIFIER:
-        add_metrics(metric_dict, cls_gt, cls_pred, "classifier")
-
-    if cfg.USE_SEM_REFINEMENT:
-        add_metrics(metric_dict, sem_gt, sem_pred, "semantics")
+    add_metrics(metric_dict, cls_gt, cls_pred)
     return metric_dict
 
 
-def add_metrics(metric_dict, gt, pred, name):
-    acc = accuracy_score(gt, pred)
+def add_metrics(metric_dict, gt, pred, split="val"):
+    cm = confusion_matrix(gt, pred)
+    per_class_acc = cm.diagonal() / cm.sum(axis=1)
+    acc = np.mean(per_class_acc)
     balanced_acc = balanced_accuracy_score(gt, pred)
+    prec, recall, f1, _ = precision_recall_fscore_support(gt, pred, average='binary')
 
-    if name == 'classifier':
-        avg = 'binary'
-    else:
-        avg = 'weighted'
-    prec, recall, f1, _ = precision_recall_fscore_support(gt, pred, average=avg)
+    for cls_id, cls_acc in enumerate(per_class_acc):
+        key = "{}/acc_{}".format(split, cls_id)
+        metric_dict.update((key), (cls_acc))
 
-    name = 'val/{}/'.format(name)
-    keys = [name + 'acc', name + 'balanced_acc', name + 'f1', name + 'prec', name + 'recall']
+    keys = [split + 'overall_acc', split + 'balanced_acc', split + 'f1', split + 'prec', split + 'recall']
     values = [acc, balanced_acc, f1.item(), prec.item(), recall.item()]
     metric_dict.update(zip(keys, values))
 
@@ -253,8 +241,6 @@ if __name__ == "__main__":
     cfg.BATCH_SIZE = args.batch_size
     cfg.EPOCHS = args.epochs
     cfg.USE_SEM_FEATURES = args.use_sem_features
-    cfg.USE_SEM_REFINEMENT = args.use_sem_refinement
-    cfg.USE_SEM_WEIGHTS = args.use_sem_weights
 
     if cfg.USE_SEM_FEATURES:
         feature_dims = 256
@@ -289,7 +275,7 @@ if __name__ == "__main__":
     valid_dataset = SegmentDataset(data_dir, split='validation', n_points=cfg.N_POINTS)
 
     # create samplers
-    train_sampler = WeightedRandomSampler(train_dataset.weights, len(train_dataset), replacement=True)
+    train_sampler = WeightedRandomSampler(train_dataset.cls_weights, len(train_dataset), replacement=True)
     valid_sampler = None
 
     # create dataloader
@@ -311,12 +297,7 @@ if __name__ == "__main__":
         collate_fn=valid_dataset.collate_batch
     )
 
-    if cfg.USE_SEM_WEIGHTS:
-        sem_weights = torch.from_numpy(train_dataset.sem_weights).cuda().float()
-    else:
-        sem_weights = None
-    
     train(
-        cfg, model, optimizer, train_loader, sem_weights=sem_weights, 
+        cfg, model, optimizer, train_loader,
         val_loader=valid_loader, ckpt_dir=ckpt_dir
     )

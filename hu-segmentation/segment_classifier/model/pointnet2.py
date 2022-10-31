@@ -40,7 +40,7 @@ class PointNet2Classification(nn.Module):
     def __init__(self, cfg, input_channels=3, num_classes=1):
         super(PointNet2Classification, self).__init__()
 
-        # flags for segment_objectness head and semantic refinement head
+        # flags for segment_objectness head
         self.config = cfg
 
         self.SA_modules = nn.ModuleList()
@@ -70,14 +70,8 @@ class PointNet2Classification(nn.Module):
             )
             channel_in = mlps[-1]
 
-        if cfg.USE_SEG_CLASSIFIER:
-            cls_channel = 1 if num_classes == 2 else num_classes
-            self.cls_layer = self._create_head(channel_in, cls_channel)
-
-        if cfg.USE_SEM_REFINEMENT:
-            cls_channel = cfg.NUM_THINGS
-            self.sem_layer = self._create_head(channel_in, cls_channel)
-
+        cls_channel = 1 if num_classes == 2 else num_classes
+        self.cls_layer = self._create_head(channel_in, cls_channel)
         self.init_weights(weight_init='xavier')
     
     def _create_head(self, in_channels, cls_channels):
@@ -138,53 +132,41 @@ class PointNet2Classification(nn.Module):
 
         for module in self.SA_modules:
             xyz, features = module(xyz, features)
+        objectness = self.cls_layer(features).transpose(1, 2).contiguous().squeeze(dim=1)  # (B, 1 or 2)
+        return objectness
 
-        objectness, semantics = None, None
-        if self.config.USE_SEG_CLASSIFIER:
-            objectness = self.cls_layer(features).transpose(1, 2).contiguous().squeeze(dim=1)  # (B, 1 or 2)
+    def loss_fn(self, pred_obj_cls, batch):
+        cls_labels = batch["gt_label"].cuda().float()
+        if self.config.USE_FOCAL_LOSS:
+            cls_loss_func = sigmoid_focal_loss
+        else:
+            cls_loss_func = F.binary_cross_entropy_with_logits
+        cls_loss = cls_loss_func(pred_obj_cls, cls_labels).mean()
+        return cls_loss
 
-        if self.config.USE_SEM_REFINEMENT:
-            semantics = self.sem_layer(features).transpose(1, 2).contiguous().squeeze(dim=1)  # (B, K)
-        return objectness, semantics
 
-    def loss_fn(self, pred_obj_cls, pred_sem_cls, batch, sem_weights=None, train=True):
-        cls_loss, sem_loss = 0., 0.
-        if self.config.USE_SEG_CLASSIFIER:
-            cls_labels = batch["gt_label"].cuda().float()
-            if self.config.USE_FOCAL_LOSS:
-                cls_loss_func = sigmoid_focal_loss
-            else:
-                cls_loss_func = F.binary_cross_entropy_with_logits
-            cls_loss = cls_loss_func(pred_obj_cls, cls_labels).mean()
+class PointNet2Refinement(PointNet2Classification):
+    """
+    PointNet++
 
-        if self.config.USE_SEM_REFINEMENT:
-            segment_label = batch["semantic_label"].cuda().long() - 1
-            if self.config.USE_FOCAL_LOSS_SEG:
-                sem_loss_func = self.focal_loss
-            else:
-                sem_loss_func = F.cross_entropy
+    Attributes:
+        input_channels : int
+            Number of channels associated with features (excludes x,y,z)
+        num_classes : int
+            Number of categories for classification
+    
+    NOTE: Batch size cannot be 1 for this network since we use BN: https://discuss.pytorch.org/t/error-expected-more-than-1-value-per-channel-when-training/26274/2
+    PointRCNN does not use BN so it's all good
+    """    
+    def loss_fn(self, pred_sem_cls, batch):
+        segment_label = batch["semantic_label"].cuda().long() - 1
+        if self.config.USE_FOCAL_LOSS:
+            sem_loss_func = self.focal_loss
+        else:
+            sem_loss_func = F.cross_entropy
 
-            # backpropagate only for valid segments
-            if train:
-                inds = torch.where(batch['gt_label'] == 1)
-                pred_sem_cls = pred_sem_cls[inds] 
-                segment_label = segment_label[inds]
-            else:
-                if self.config.USE_SEG_CLASSIFIER:
-                    inds = torch.where(pred_obj_cls.sigmoid() >= self.config.FG_THRESH)
-                    pred_sem_cls = pred_sem_cls[inds] 
-                    segment_label = segment_label[inds]
-            
-            if not self.config.USE_SEM_WEIGHTS:
-                sem_weights = None
-
-            # only compute loss if there are positive segments
-            if len(inds):
-                if self.config.USE_FOCAL_LOSS_SEG:
-                    sem_loss = sem_loss_func(pred_sem_cls, segment_label, reduction="mean")
-                else:
-                    sem_loss = sem_loss_func(pred_sem_cls, segment_label, weight=sem_weights)
-        return cls_loss + 10. * sem_loss
+        sem_loss = sem_loss_func(pred_sem_cls, segment_label, reduction="mean")
+        return sem_loss
     
     # Adapted from: https://kornia.readthedocs.io/en/latest/_modules/kornia/losses/focal.html
     def focal_loss(
@@ -253,8 +235,6 @@ class PointNet2Classification(nn.Module):
 class Config:
     # Model config
     USE_SEM_FEATURES = False
-    USE_SEG_CLASSIFIER = True
-    USE_SEM_REFINEMENT = False
 
 
 if __name__ == "__main__":
