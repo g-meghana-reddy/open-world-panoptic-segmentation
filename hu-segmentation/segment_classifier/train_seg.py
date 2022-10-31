@@ -60,7 +60,6 @@ def parse_args():
     parser.add_argument('-e', '--epochs', type=int, default=200)
     parser.add_argument('-b', '--batch_size', type=int, default=512)
     parser.add_argument('--use-sem-features', action="store_true")
-    parser.add_argument('--use-sem-weights', action="store_true")
     return parser.parse_args()
 
 # __C.TRAIN.MOMS = [0.95, 0.85]
@@ -144,7 +143,7 @@ def train(cfg, model, optimizer, train_loader, val_loader=None, ckpt_dir='checkp
 
             # log training metrics every epoch
             if cfg.USE_WANDB:
-                gt = batch["sem_label"].long().cpu().numpy() - 1
+                gt = batch["semantic_label"].long().cpu().numpy() - 1
                 metric_dict = {}
                 add_metrics(metric_dict, gt, output_dict["pred_labels"], split="train")
                 wandb.log(metric_dict, step=it)
@@ -238,7 +237,7 @@ if __name__ == "__main__":
         wandb.run.name = args.exp
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = PointNet2Refinement(cfg, input_channels=feature_dims, num_classes=1)
+    model = PointNet2Refinement(cfg, input_channels=feature_dims, num_classes=cfg.NUM_THINGS)
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
     model.to(device)
