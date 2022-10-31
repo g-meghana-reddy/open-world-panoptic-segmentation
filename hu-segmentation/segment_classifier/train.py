@@ -36,6 +36,7 @@ class Config:
 
     # Loss config
     USE_FOCAL_LOSS = False
+    USE_FOCAL_LOSS_SEG = True
 
     # Optimizer parameters
     WEIGHT_DECAY = 0.0
@@ -52,7 +53,7 @@ class Config:
     EPOCHS = 200
     BATCH_SIZE = 512
     N_POINTS = 1024
-    USE_WANDB = False
+    USE_WANDB = True
 
 
 def parse_args():
@@ -171,7 +172,7 @@ def validate(cfg, model, val_loader, sem_weights=None):
     model.eval()
 
     total_loss = 0.
-    num_batches, corr_pred = 0, 0
+    num_batches_neg, num_batches_pos, corr_pred_pos, corr_pred_neg = 0, 0, 0, 0
     cls_gt, cls_pred, sem_gt, sem_pred = [], [], [], []
     for i, batch in tqdm.tqdm(enumerate(val_loader, 0), total=len(val_loader), leave=False, desc='val'):
         optimizer.zero_grad()
@@ -202,8 +203,11 @@ def validate(cfg, model, val_loader, sem_weights=None):
             pos_inds = cls_labels == 1
             neg_inds = cls_labels == 0
             if pos_inds.sum() != 0:
-                corr_pred += cls_pred_label[pos_inds].sum() / pos_inds.sum()
-                num_batches += 1
+                corr_pred_pos += cls_pred_label[pos_inds].sum() / pos_inds.sum()
+                num_batches_pos += 1
+            if neg_inds.sum() != 0:
+                corr_pred_neg += cls_pred_label[neg_inds].sum() / neg_inds.sum()
+                num_batches_neg += 1
 
         if cfg.USE_SEM_REFINEMENT:
             sem_pred_label = torch.argmax(pred_sem, axis=-1).long()
@@ -212,8 +216,9 @@ def validate(cfg, model, val_loader, sem_weights=None):
 
     # compute validation metrics
     metric_dict = {
-        'val/loss': total_loss,
-        'val/positives_accuracy': corr_pred / num_batches
+        'val/loss': total_loss / len(val_loader),
+        'val/classifier/positives_accuracy': corr_pred_pos / num_batches_pos,
+        'val/classifier/negatives_accuracy': 1 - (corr_pred_neg / num_batches_neg)
     }
     if cfg.USE_SEG_CLASSIFIER:
         add_metrics(metric_dict, cls_gt, cls_pred, "classifier")
@@ -233,7 +238,7 @@ def add_metrics(metric_dict, gt, pred, name):
         avg = 'weighted'
     prec, recall, f1, _ = precision_recall_fscore_support(gt, pred, average=avg)
 
-    name = 'val/{}_'.format(name)
+    name = 'val/{}/'.format(name)
     keys = [name + 'acc', name + 'balanced_acc', name + 'f1', name + 'prec', name + 'recall']
     values = [acc, balanced_acc, f1.item(), prec.item(), recall.item()]
     metric_dict.update(zip(keys, values))
