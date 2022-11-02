@@ -67,7 +67,10 @@ def evaluate(model, points, features=None):
         cls_, sem = model(points[None])
         score = cls_.sigmoid().cpu().numpy().item()
         if sem is not None:
-            sem = sem.softmax(-1).argmax().cpu().numpy().item() + 1
+            if score >= 0.5:
+                sem = sem.softmax(-1).argmax().cpu().numpy().item() + 1
+            else:
+                sem = -1
     return score, sem
 
     
@@ -175,9 +178,9 @@ if __name__ == '__main__':
 
     if args.use_sem_refinement:
         in_channels = 256 # 0
-        # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats_sem_refinement_weighted/checkpoints/epoch_200.pth"
+        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats_sem_refinement_weighted/checkpoints/epoch_200.pth"
         # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/sem_feats_only_focal_sem_refinement_weighted_project_input_1024/checkpoints/epoch_200.pth"
-        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats_sem_reifnement_weighted_new_indices/checkpoints/epoch_200.pth"
+        # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats_sem_reifnement_weighted_new_indices/checkpoints/epoch_200.pth"
         # args.ckpt = "/project_data/ramanan/mganesin/4D-PLS/results/checkpoints/xyz_sem_mean_refine/checkpoints/epoch_200.pth"
     elif args.use_sem_features:
         in_channels = 256
@@ -340,7 +343,7 @@ if __name__ == '__main__':
         new_instance = instances.max() + 1
         for id_, indices in enumerate(mapped_indices):
             instances[indices] = new_instance + id_
-            if args.use_sem_refinement:
+            if args.use_sem_refinement and flat_sem_labels[id_] != -1:
                 labels[indices] = flat_sem_labels[id_]
 
         # Create .label files using the updated instance and semantic labels
