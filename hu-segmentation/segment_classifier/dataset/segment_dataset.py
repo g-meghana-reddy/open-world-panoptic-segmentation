@@ -33,7 +33,7 @@ class SegmentDataset(Dataset):
             indices_file = os.path.join(dataset_path, "class_indices.npz")
             if os.path.exists(indices_file):
                 print("Loading precomputed indices")
-                indices = dict(np.load(indices_file))
+                indices = dict(np.load(indices_file, allow_pickle=True))
                 pos_indices, neg_indices = indices["pos_indices"], indices["neg_indices"]
                 sem_class_counts = indices["sem_class_counts"]
             else:
