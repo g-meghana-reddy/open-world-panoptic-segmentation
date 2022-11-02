@@ -105,7 +105,7 @@ class SemanticKittiDataset(PointCloudDataset):
         elif self.task_set == 1:
             self.things = 4
         elif self.task_set == 2:
-            self.things = 7
+            self.things = 6
         else:
             self.things = 9
 
@@ -144,7 +144,7 @@ class SemanticKittiDataset(PointCloudDataset):
             for k, v in learning_map_inv.items():
                 self.learning_map_inv[k] = v
 
-            if self.task_set in (0, 1):
+            if self.task_set in (0, 1, 2):
                 self.unknown_label = max(learning_map.values())
 
             if self.return_unknowns:
@@ -378,7 +378,7 @@ class SemanticKittiDataset(PointCloudDataset):
                         center_labels = np.zeros_like(center_labels)
 
                     # mask instance labels for unknown class
-                    if self.task_set in (0, 1):
+                    if self.task_set in (0, 1, 2):
                         ins_labels[sem_labels == self.unknown_label] = 0
 
                     # center_labels = (center_labels > 0.3) * 1
