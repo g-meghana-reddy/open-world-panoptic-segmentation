@@ -1,5 +1,6 @@
 import glob
 import os
+import yaml
 
 import numpy as np
 import torch
@@ -7,12 +8,40 @@ from torch.utils.data import Dataset
 
 
 class SegmentDataset(Dataset):
-    def __init__(self, dataset_path, split='training', n_points=1024, num_things=8, semantic_classes=20):
+    def __init__(self, dataset_path, split='training', n_points=1024, task_set=1):
         self.path = dataset_path
         self.split = split
         self.n_points = n_points
-        self.num_things = num_things
-        self.semantic_classes = semantic_classes
+
+        # get thing classes based on task set
+        if task_set == -1:
+            config_file = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti-orig.yaml"
+            self.num_things = 9
+        else:
+            config_file = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti.yaml"
+            if task_set == 1:
+                self.num_things = 4
+            elif task_set == 2:
+                self.num_things = 6
+
+        with open(config_file, 'r') as stream:
+            doc = yaml.safe_load(stream)
+            if task_set == -1:
+                learning_map_inv = doc['learning_map_inv']
+                learning_map = doc['learning_map']
+            else:
+                task_set_map = doc['task_set_map']
+                learning_map_inv = task_set_map[task_set]['learning_map_inv']
+                learning_map = task_set_map[task_set]['learning_map']
+            self.learning_map = np.zeros((np.max([k for k in learning_map.keys()]) + 1), dtype=np.int32)
+            for k, v in learning_map.items():
+                self.learning_map[k] = v
+
+            self.learning_map_inv = np.zeros((np.max([k for k in learning_map_inv.keys()]) + 1), dtype=np.int32)
+            for k, v in learning_map_inv.items():
+                self.learning_map_inv[k] = v
+
+        self.semantic_classes = max(learning_map.values()) + 1
 
         # data augmentation flags
         self.random_jitter = False
@@ -30,37 +59,56 @@ class SegmentDataset(Dataset):
         # compute weights for sampling during training
         self.paths = self.load_paths()
         if self.split == "training":
-            indices_file = os.path.join(dataset_path, "class_indices.npz")
+            indices_file = os.path.join(dataset_path, "class_indices_regression.npz")
             if os.path.exists(indices_file):
                 print("Loading precomputed indices")
                 indices = dict(np.load(indices_file, allow_pickle=True))
                 pos_indices, neg_indices = indices["pos_indices"], indices["neg_indices"]
+                sem_label_to_pos_idx = indices["sem_label_to_pos_idx"].item()
+                sem_label_to_idx = indices["sem_label_to_idx"].item()
                 sem_class_counts = indices["sem_class_counts"]
             else:
                 print("Precomputing indices, one-time only!")
                 pos_indices, neg_indices = [], []
+                sem_label_to_pos_idx = {i: [] for i in range(self.semantic_classes)}
+                sem_label_to_idx = {i: [] for i in range(self.semantic_classes)}
                 sem_class_counts = np.zeros((self.semantic_classes, 1))
                 for idx, path in enumerate(self.paths):
                     segment_data = dict(np.load(path))
+                    sem_label = segment_data["semantic_label"].item()
                     if segment_data["gt_label"] == 1:
                         pos_indices.append(idx)
-                        sem_class_counts[segment_data["semantic_label"]] += 1
+                        sem_class_counts[sem_label] += 1
+                        sem_label_to_pos_idx[sem_label].append(idx)
                     else:
                         neg_indices.append(idx)
+                    sem_label_to_idx[sem_label].append(idx)
+                sem_label_to_pos_idx_arr = np.array(sem_label_to_pos_idx)
+                sem_label_to_idx_arr = np.array(sem_label_to_idx)
                 np.savez(
                     indices_file,
                     pos_indices=pos_indices,
                     neg_indices=neg_indices,
-                    sem_class_counts=sem_class_counts
+                    sem_class_counts=sem_class_counts,
+                    sem_label_to_pos_idx=sem_label_to_pos_idx_arr,
+                    sem_label_to_idx=sem_label_to_idx_arr,
                 )
 
             num_segments = len(self.paths)
             self.weights = torch.zeros(num_segments)
             self.weights[pos_indices] = num_segments / len(pos_indices)
             self.weights[neg_indices] = num_segments / len(neg_indices)
-            self.sem_weights = np.divide(
-                sem_class_counts[1:9].sum(), sem_class_counts[1:9], 
-                out=np.zeros_like(sem_class_counts[1:9]), where=sem_class_counts[1:9] != 0)
+
+            # assign each segment weights using semantic labels
+            self.sem_weights = torch.zeros(num_segments)
+            for cls_id, cls_idxs in sem_label_to_pos_idx.items():
+                # check if thing class as per original class vocabulary
+                if cls_id > 0 and cls_id < self.num_things:
+                    self.sem_weights[cls_idxs] = num_segments / len(cls_idxs)
+
+            self.sem_loss_weights = np.divide(
+                sem_class_counts[1:self.num_things].sum(), sem_class_counts[1:self.num_things], 
+                out=np.zeros_like(sem_class_counts[1:self.num_things]), where=sem_class_counts[1:self.num_things] != 0)
 
     def load_paths(self):
         paths = []

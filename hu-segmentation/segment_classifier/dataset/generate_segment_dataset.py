@@ -18,13 +18,13 @@ torch.manual_seed(0)
 torch.cuda.manual_seed_all(0)
 
 DATA_DIR = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/"
-OUTPUT_PATH = "/project_data/ramanan/achakrav/4D-PLS/data/segment_dataset/"
+OUTPUT_PATH = "/project_data/ramanan/achakrav/4D-PLS/data/segment_dataset_regression"
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=-1)
-    # parser.add_argument("-s", "--sequence", help="Sequence ID", type=int, default=8)
+    parser.add_argument("-s", "--sequence", help="Sequence ID", type=int, default=8)
     parser.add_argument("-p", "--prev_train_path", help="Directory to load checkpoint", default='4DPLS_original_params_original_repo_nframes1_1e-3')
     parser.add_argument("-i", "--chkp_idx", help="Index of checkpoint", type=int, default=None)
     parser.add_argument("-g", "--gpu-id", help="GPU ID", type=int, default=0)
@@ -79,6 +79,8 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
     data_path = None
     if config.saving:
         data_path = join(OUTPUT_PATH)
+        if config.task_set > -1:
+            data_path = data_path + "_TS{}".format(config.task_set)
         if not exists(data_path):
             makedirs(data_path)
     
@@ -218,7 +220,7 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
                 # generate_segments_per_scan(scan_file, frame_emb_preds, frame_gt_labels, frame_gt_ins_labels, filepath) 
                 generate_segments_per_scan(
                     scan_file, frame_emb_preds, frame_preds, frame_gt_labels,
-                    frame_gt_ins_labels, filepath, frame_xyz
+                    frame_gt_ins_labels, filepath, task_set=config.task_set, frame_xyz=frame_xyz
                 )
                 print("*************** Ended constructing tree scan_file: {}_{}    *************** ".format(seq_name, frame_name))
                 i0 += length
@@ -239,7 +241,7 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
 
     return
 
-def generate_segments_per_scan(scan_file, frame_emb_preds, frame_pred_labels, frame_gt_labels, frame_gt_ins_labels, filepath, frame_xyz=None):
+def generate_segments_per_scan(scan_file, frame_emb_preds, frame_pred_labels, frame_gt_labels, frame_gt_ins_labels, filepath, task_set=-1, frame_xyz=None):
     '''Constructs the hierarchical tree using the thing class points and per 
         node/segment score is computed to generate the segment dataset.'''
     #****************************************************
@@ -252,8 +254,15 @@ def generate_segments_per_scan(scan_file, frame_emb_preds, frame_pred_labels, fr
     # Compute the things mask and compute labels, xyz points accordingly
     #********************************************************************
     # thing classes: [1,2,3,4,5,6,7,8]
-    gt_things_mask = np.where(np.logical_and(frame_gt_labels > 0, frame_gt_labels < 9))
-    things_mask = np.where(np.logical_and(frame_pred_labels > 0, frame_pred_labels < 9))
+    if task_set == -1:
+        num_things = 9
+    elif task_set == 1:
+        num_things = 4
+    elif task_set == 2:
+        num_things = 6
+
+    gt_things_mask = np.where(np.logical_and(frame_gt_labels > 0, frame_gt_labels < num_things))
+    things_mask = np.where(np.logical_and(frame_pred_labels > 0, frame_pred_labels < num_things))
 
     # generate all labels for things only
     if frame_xyz is not None:
@@ -327,7 +336,10 @@ if __name__ == '__main__':
     chkp_idx = args.chkp_idx
     if previous_training_path:
         # Find all snapshot in the chosen training folder
-        chkp_path = os.path.join("/project_data/ramanan/mganesin/4D-PLS/results", previous_training_path, "checkpoints")
+        if args.task_set == -1:
+            chkp_path = os.path.join("/project_data/ramanan/mganesin/4D-PLS/results", previous_training_path, "checkpoints")
+        else:
+            chkp_path = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/4DPLS_TS{}_updated_vocab/checkpoints".format(args.task_set)
         chkps = [f for f in os.listdir(chkp_path) if f[:4] == 'chkp']
 
         # Find which snapshot to restore
@@ -349,7 +361,10 @@ if __name__ == '__main__':
     # Initialize configuration class from checkpoint path
     config = SemanticKittiConfig()
     if previous_training_path:
-        config.load(os.path.join('/project_data/ramanan/mganesin/4D-PLS/results', previous_training_path))
+        if args.task_set == -1:
+            config.load(os.path.join('/project_data/ramanan/achakrav/4D-PLS/results', previous_training_path))
+        else:
+            config.load('/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/4DPLS_TS{}_updated_vocab'.format(args.task_set))
 
     # Set the other configuration parameters to match the training config
     config.free_dim = 4
@@ -375,7 +390,7 @@ if __name__ == '__main__':
 
     # Initialize datasets
     test_dataset = SemanticKittiDataset(
-        config, set='validation', balance_classes=False, seqential_batch=True, datapath=DATA_DIR)
+        config, set='validation', sequence=args.sequence, balance_classes=False, seqential_batch=True, datapath=DATA_DIR)
 
     # Initialize samplers
     test_sampler = SemanticKittiSampler(test_dataset)

@@ -1,3 +1,4 @@
+import numpy as np
 import argparse
 import os
 
@@ -36,7 +37,11 @@ class Config:
 
     # Loss config
     USE_FOCAL_LOSS = False
-    USE_FOCAL_LOSS_SEG = True
+    USE_FOCAL_LOSS_SEG = False
+    USE_MEAN_ERROR_LOSS = True
+
+    # Pos encoding
+    USE_POS_ENCODING = False
 
     # Optimizer parameters
     WEIGHT_DECAY = 0.0
@@ -53,18 +58,22 @@ class Config:
     EPOCHS = 200
     BATCH_SIZE = 512
     N_POINTS = 1024
-    USE_WANDB = True
+    USE_WANDB = False
 
+    PRETRAIN = 0.0
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Arg parser")
-    parser.add_argument('--exp', type=str, default="xyz_mean_focal_loss")
+    parser.add_argument('--exp', type=str, default="xyz_mean_regression_MSE_LOSS_200_double_mlp")
     parser.add_argument('--ckpt', type=str, default=None)
     parser.add_argument('-e', '--epochs', type=int, default=200)
     parser.add_argument('-b', '--batch_size', type=int, default=512)
+    parser.add_argument('-t', '--task_set', choices=(-1, 1, 2), type=int, default=-1)
     parser.add_argument('--use-sem-features', action="store_true")
     parser.add_argument('--use-sem-refinement', action="store_true")
     parser.add_argument('--use-sem-weights', action="store_true")
+    parser.add_argument('--finetune', action="store_true")
+    parser.add_argument('--pretrain_ckpt', type=str, default='../../results/checkpoints/xyz_sem_mean_SA_pos_embedding_pretrain/checkpoints/epoch_100.pth')
     return parser.parse_args()
 
 # __C.TRAIN.MOMS = [0.95, 0.85]
@@ -172,6 +181,7 @@ def validate(cfg, model, val_loader, sem_weights=None):
     model.eval()
 
     total_loss = 0.
+    num_batches = 0
     num_batches_neg, num_batches_pos, corr_pred_pos, corr_pred_neg = 0, 0, 0, 0
     cls_gt, cls_pred, sem_gt, sem_pred = [], [], [], []
     for i, batch in tqdm.tqdm(enumerate(val_loader, 0), total=len(val_loader), leave=False, desc='val'):
@@ -214,11 +224,13 @@ def validate(cfg, model, val_loader, sem_weights=None):
             sem_gt.extend(sem_label.long().cpu().numpy())
             sem_pred.extend(sem_pred_label.detach().cpu().numpy())
 
+        num_batches += 1
     # compute validation metrics
     metric_dict = {
-        'val/loss': total_loss / len(val_loader),
-        'val/classifier/positives_accuracy': corr_pred_pos / num_batches_pos,
-        'val/classifier/negatives_accuracy': 1 - (corr_pred_neg / num_batches_neg)
+        'val/loss': total_loss,
+        'val/mean_loss': total_loss/num_batches,
+        'val/positives_accuracy': corr_pred_pos / num_batches_pos,
+        'val/negatives_accuracy': 1 - (corr_pred_neg / num_batches_neg)
     }
     if cfg.USE_SEG_CLASSIFIER:
         add_metrics(metric_dict, cls_gt, cls_pred, "classifier")
@@ -229,6 +241,14 @@ def validate(cfg, model, val_loader, sem_weights=None):
 
 
 def add_metrics(metric_dict, gt, pred, name):
+    keys = []
+    values = []
+    gt_arr = np.array(gt)
+    gt_unique = np.unique(gt_arr)
+    
+    for g in list(gt_unique):
+        keys += ['val/acc_{}'.format(g)]
+        values += [accuracy_score(gt_arr[gt_arr==g], np.array(pred)[gt_arr==g])]
     acc = accuracy_score(gt, pred)
     balanced_acc = balanced_accuracy_score(gt, pred)
 
@@ -238,15 +258,18 @@ def add_metrics(metric_dict, gt, pred, name):
         avg = 'weighted'
     prec, recall, f1, _ = precision_recall_fscore_support(gt, pred, average=avg)
 
-    name = 'val/{}/'.format(name)
-    keys = [name + 'acc', name + 'balanced_acc', name + 'f1', name + 'prec', name + 'recall']
-    values = [acc, balanced_acc, f1.item(), prec.item(), recall.item()]
+    name = 'val/{}_'.format(name)
+    keys += [name + 'acc', name + 'balanced_acc', name + 'f1', name + 'prec', name + 'recall']
+    values += [acc, balanced_acc, f1.item(), prec.item(), recall.item()]
     metric_dict.update(zip(keys, values))
 
 
 if __name__ == "__main__":
     args = parse_args()
-    data_dir = "/project_data/ramanan/achakrav/4D-PLS/data/segment_dataset/"
+    data_dir = "/project_data/ramanan/achakrav/4D-PLS/data/segment_dataset_regression"
+    if args.task_set > -1:
+        data_dir = data_dir + "_TS{}".format(args.task_set)
+        args.exp = args.exp + "_TS{}".format(args.task_set)
 
     # load training config
     cfg = Config()
@@ -267,6 +290,13 @@ if __name__ == "__main__":
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = PointNet2Classification(cfg, input_channels=feature_dims, num_classes=1)
+    # if not cfg.PRETRAIN:
+    #     model = PointNet2Classification(cfg, input_channels=feature_dims, num_classes=1)
+    # else:
+    #     model = PointNet2Classification(cfg, feature_dims).cuda()
+    #     ckpt = torch.load(args.pretrain_ckpt)
+    #     model.load_state_dict(ckpt["model_state"])
+
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
     model.to(device)
@@ -285,8 +315,8 @@ if __name__ == "__main__":
         last_epoch = start_epoch + 1
 
     # create dataset
-    train_dataset = SegmentDataset(data_dir, split='training', n_points=cfg.N_POINTS)
-    valid_dataset = SegmentDataset(data_dir, split='validation', n_points=cfg.N_POINTS)
+    train_dataset = SegmentDataset(data_dir, split='training', n_points=cfg.N_POINTS, task_set=args.task_set)
+    valid_dataset = SegmentDataset(data_dir, split='validation', n_points=cfg.N_POINTS, task_set=args.task_set)
 
     # create samplers
     train_sampler = WeightedRandomSampler(train_dataset.weights, len(train_dataset), replacement=True)

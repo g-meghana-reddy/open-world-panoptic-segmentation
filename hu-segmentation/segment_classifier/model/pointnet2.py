@@ -10,18 +10,62 @@ import model.pytorch_utils as pt_utils
 
 USE_BN = False
 DP_RATIO = 0.0
-# XYZ_UP_LAYER = [1024, 256]
-XYZ_UP_LAYER = [128, 128]
+XYZ_UP_LAYER = [256, 256]
 
 NUM_POINTS = 512
 NPOINTS = [128, 32, -1]
+
 RADIUS = [0.2, 0.4, 100]
 NSAMPLE = [64, 64, 64]
-MLPS = [[128, 128, 128],
-        [128, 128, 256],
+# MLPS = [[128, 128, 128],
+#         [128, 128, 256],
+#         [256, 256, 512]]
+MLPS = [[256, 384, 256],
+        [256, 384, 256],
         [256, 256, 512]]
+
 CLS_FC = [256, 256]
-REG_FC = [256, 256]
+SEM_FC = [256, 256]
+
+
+class HarmonicEmbedding(torch.nn.Module):
+    def __init__(
+        self,
+        in_channels: int = 3,
+        n_harmonic_functions: int = 6,
+        omega0: float = 1.0,
+        logspace: bool = True,
+        include_input: bool = True,
+    ) -> None:
+        super().__init__()
+
+        if logspace:
+            frequencies = 2.0 ** torch.arange(
+                n_harmonic_functions,
+                dtype=torch.float32,
+            )
+        else:
+            frequencies = torch.linspace(
+                1.0,
+                2.0 ** (n_harmonic_functions - 1),
+                n_harmonic_functions,
+                dtype=torch.float32,
+            )
+
+        self.register_buffer("_frequencies", omega0 * frequencies, persistent=False)
+        self.include_input = include_input
+        self.output_dim = n_harmonic_functions * 2 * in_channels
+
+        if self.include_input:
+            self.output_dim += in_channels
+
+    def forward(self, x: torch.Tensor):
+        embed = (x[..., None] * self._frequencies).view(*x.shape[:-1], -1)
+
+        if self.include_input:
+            return torch.cat((embed.sin(), embed.cos(), x), dim=-1)
+        else:
+            return torch.cat((embed.sin(), embed.cos()), dim=-1)
 
 
 class PointNet2Classification(nn.Module):
@@ -46,14 +90,23 @@ class PointNet2Classification(nn.Module):
         self.SA_modules = nn.ModuleList()
         channel_in = input_channels
 
+        xyz_dim = 3
+        if cfg.USE_POS_ENCODING:
+            print("Using positional embedding...")
+            self.pos_encoding_layer = HarmonicEmbedding(3)
+            self.pos_xyz_up_layer = pt_utils.SharedMLP([self.pos_encoding_layer.output_dim, channel_in, channel_in],
+                                                bn=USE_BN)
+            xyz_dim = channel_in
+
         # project XYZ into higher dimension
-        input_channel = 3 + channel_in
-        self.xyz_up_layer = pt_utils.SharedMLP([input_channel] + XYZ_UP_LAYER,
+        self.rcnn_input_channel = xyz_dim + channel_in
+        self.xyz_up_layer = pt_utils.SharedMLP([self.rcnn_input_channel] + XYZ_UP_LAYER,
                                                 bn=USE_BN)
         # c_out = XYZ_UP_LAYER[-1]
         # self.merge_down_layer = pt_utils.SharedMLP([c_out * 2, c_out], bn=USE_BN)
 
         # encode features
+        channel_in = XYZ_UP_LAYER[-1]
         for k in range(len(NPOINTS)):
             mlps = [channel_in] + MLPS[k]
 
@@ -76,16 +129,16 @@ class PointNet2Classification(nn.Module):
 
         if cfg.USE_SEM_REFINEMENT:
             cls_channel = cfg.NUM_THINGS
-            self.sem_layer = self._create_head(channel_in, cls_channel)
+            self.sem_layer = self._create_head(channel_in, cls_channel, SEM_FC)
 
         self.init_weights(weight_init='xavier')
     
-    def _create_head(self, in_channels, cls_channels):
+    def _create_head(self, in_channels, cls_channels, num_layers=CLS_FC):
         cls_layers = []
         pre_channel = in_channels
-        for k in range(len(CLS_FC)):
-            cls_layers.append(pt_utils.Conv1d(pre_channel, CLS_FC[k], bn=USE_BN))
-            pre_channel = CLS_FC[k]
+        for k in range(len(num_layers)):
+            cls_layers.append(pt_utils.Conv1d(pre_channel, num_layers[k], bn=USE_BN))
+            pre_channel = num_layers[k]
         cls_layers.append(pt_utils.Conv1d(pre_channel, cls_channels, activation=None))
         if DP_RATIO > 0:
             cls_layers.insert(1, nn.Dropout(DP_RATIO))
@@ -132,9 +185,27 @@ class PointNet2Classification(nn.Module):
         """
         xyz, features = self._break_up_pc(pointcloud)
 
-        # xyz_input = torch.cat((xyz, features.transpose(1, 2)), dim=-1)
-        # xyz_feature = self.xyz_up_layer(xyz_input.transpose(1, 2).unsqueeze(dim=3))
-        # xyz, features = xyz, xyz_feature.squeeze(dim=3)
+        # xyz_input = xyz[..., 0:self.rcnn_input_channel].transpose(1, 2).unsqueeze(dim=3)
+        # xyz_feature = self.xyz_up_layer(xyz_input)
+
+        # rpn_feature = xyz[..., self.rcnn_input_channel:].transpose(1, 2).unsqueeze(dim=3)
+
+        # merged_feature = torch.cat((xyz_feature, rpn_feature), dim=1)
+        # merged_feature = self.merge_down_layer(merged_feature)
+        # # l_xyz, l_features = [xyz], [merged_feature.squeeze(dim=3)]
+        # xyz, features = xyz, merged_feature.squeeze(dim=3)
+
+        if self.config.USE_POS_ENCODING:
+            xyz_pos_features = self.pos_encoding_layer(xyz)
+            xyz_pos_features = self.pos_xyz_up_layer(xyz_pos_features.transpose(1, 2).unsqueeze(dim=3)).squeeze(dim=3)
+            xyz_input = torch.cat((xyz_pos_features.transpose(1, 2), features.transpose(1, 2)), dim=-1)
+        elif features is None:
+            xyz_input = xyz
+        else:
+            xyz_input = torch.cat((xyz, features.transpose(1, 2)), dim=-1)
+            
+        xyz_feature = self.xyz_up_layer(xyz_input.transpose(1, 2).unsqueeze(dim=3))
+        xyz, features = xyz, xyz_feature.squeeze(dim=3)
 
         for module in self.SA_modules:
             xyz, features = module(xyz, features)
@@ -151,11 +222,18 @@ class PointNet2Classification(nn.Module):
         cls_loss, sem_loss = 0., 0.
         if self.config.USE_SEG_CLASSIFIER:
             cls_labels = batch["gt_label"].cuda().float()
+            cls_iou_labels = batch["objectness"].cuda().float()
             if self.config.USE_FOCAL_LOSS:
                 cls_loss_func = sigmoid_focal_loss
+            elif self.config.USE_MEAN_ERROR_LOSS:
+                cls_loss_func = nn.MSELoss()
             else:
                 cls_loss_func = F.binary_cross_entropy_with_logits
-            cls_loss = cls_loss_func(pred_obj_cls, cls_labels).mean()
+
+            if self.config.USE_MEAN_ERROR_LOSS:
+                cls_loss = cls_loss_func(pred_obj_cls.sigmoid(), cls_iou_labels)
+            else:
+                cls_loss = cls_loss_func(pred_obj_cls, cls_labels).mean()
 
         if self.config.USE_SEM_REFINEMENT:
             segment_label = batch["semantic_label"].cuda().long() - 1
@@ -167,6 +245,7 @@ class PointNet2Classification(nn.Module):
             # backpropagate only for valid segments
             if train:
                 inds = torch.where(batch['gt_label'] == 1)
+                # inds = torch.where(pred_obj_cls.sigmoid() >= self.config.FG_THRESH)
                 pred_sem_cls = pred_sem_cls[inds] 
                 segment_label = segment_label[inds]
             else:
@@ -184,9 +263,9 @@ class PointNet2Classification(nn.Module):
                     sem_loss = sem_loss_func(pred_sem_cls, segment_label, reduction="mean")
                 else:
                     sem_loss = sem_loss_func(pred_sem_cls, segment_label, weight=sem_weights)
-        return cls_loss + 10. * sem_loss
-    
-    # Adapted from: https://kornia.readthedocs.io/en/latest/_modules/kornia/losses/focal.html
+                
+        return cls_loss + self.config.PRETRAIN * 0.1 * sem_loss
+
     def focal_loss(
         self,
         input,

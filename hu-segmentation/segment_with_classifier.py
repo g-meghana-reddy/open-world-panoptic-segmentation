@@ -26,6 +26,9 @@ class Config:
     USE_SEM_WEIGHTS = False
     NUM_THINGS = 8
 
+    # Pos encoding
+    USE_POS_ENCODING = False
+
     FG_THRESH = 0.5
     N_POINTS = 1024
 
@@ -34,11 +37,11 @@ class Config:
 def evaluate(model, points, features=None):
     num_points_in_segment = points.shape[0]
 
-    # if num_points_in_segment < 5:
-    #     sem = None
-    #     if model.config.USE_SEM_REFINEMENT:
-    #         sem = 0
-    #     return 0., sem
+    if num_points_in_segment < 5:
+        sem = -1
+        if model.config.USE_SEM_REFINEMENT:
+            sem = 0
+        return 0., sem
 
     # TODO: what to do about n_points?
     if num_points_in_segment > NUM_POINTS:
@@ -69,6 +72,11 @@ def evaluate(model, points, features=None):
         if sem is not None:
             if score >= 0.5:
                 sem = sem.softmax(-1).argmax().cpu().numpy().item() + 1
+            else:
+                sem = -1
+        else:
+            if score >= 0.5:
+                sem = 0
             else:
                 sem = -1
     return score, sem
@@ -160,6 +168,7 @@ def parse_args():
     parser.add_argument("--ckpt", help="Checkpoint to load for segment classifier", type=str, default=None)
     parser.add_argument("--use-sem-features", help="Whether to use semantic features in classifier", action="store_true")
     parser.add_argument("--use-sem-refinement", help="Whether to use semantic refinement head", action="store_true")
+    parser.add_argument("--majority-label", help="Whether to perform majority label transfer", action="store_true")
     args = parser.parse_args()
     return args
 
@@ -188,7 +197,7 @@ if __name__ == '__main__':
         args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats/checkpoints/epoch_50.pth"
     else:
         in_channels = 0
-        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal/checkpoints/epoch_200.pth"
+        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_regression_MSE_LOSS_200_double_mlp_full_dataset/checkpoints/epoch_200.pth"
 
     # instantiate the segment classifier
     cfg = Config()
@@ -337,14 +346,20 @@ if __name__ == '__main__':
 
         # mapped_flat_indices = pts_indexes_objects
         flat_scores = flatten_scores(scores)
-        if args.use_sem_refinement:
-            flat_sem_labels = flatten_labels(sem_labels)
+        # if args.use_sem_refinement:
+        flat_sem_labels = flatten_labels(sem_labels)
 
         new_instance = instances.max() + 1
         for id_, indices in enumerate(mapped_indices):
-            instances[indices] = new_instance + id_
-            if args.use_sem_refinement and flat_sem_labels[id_] != -1:
-                labels[indices] = flat_sem_labels[id_]
+            if flat_scores[id_] < 0.5:
+                instances[indices] = 9999
+            else:
+                instances[indices] = new_instance + id_
+            if args.majority_label and flat_sem_labels[id_] != -1:
+                labels[indices] = np.bincount(labels[indices]).argmax()
+
+            # if args.use_sem_refinement and flat_sem_labels[id_] != -1:
+            #     labels[indices] = flat_sem_labels[id_]
 
         # Create .label files using the updated instance and semantic labels
         sem_labels = labels.astype(np.int32)
