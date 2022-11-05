@@ -113,7 +113,7 @@ class Kitti360Dataset(PointCloudDataset):
         elif self.task_set == 1:
             self.things = 4
         elif self.task_set == 2:
-            self.things = 7
+            self.things = 6
         else:
             raise ValueError('No such task set: {}'.format(self.task_set))
 
@@ -139,7 +139,7 @@ class Kitti360Dataset(PointCloudDataset):
             for k, v in learning_map_inv.items():
                 self.learning_map_inv[k] = v
 
-            if self.task_set in (0, 1):
+            if self.task_set in (0, 1, 2):
                 self.unknown_label = max(learning_map.values())
 
             if self.return_unknowns:
