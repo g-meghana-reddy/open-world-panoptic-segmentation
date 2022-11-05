@@ -31,7 +31,9 @@ def main(FLAGS):
         unknown_sem_label = 7
     elif task_set == 1:
         unknown_sem_label = 10
-    elif task_set == 2 or task_set == -1:
+    elif task_set == 2:
+        unknown_sem_label = 16
+    else:
         unknown_sem_label = 0
 
     if FLAGS.baseline:
@@ -93,16 +95,16 @@ def main(FLAGS):
         for idx, point_file in tqdm(enumerate(seq_point_names)):
             
             # Load the semantic predictions
-            sem_path = os.path.join(prediction_path, '{0:02d}_{1:07d}.npy'.format(sequence,idx))
+            sem_path = os.path.join(prediction_path, '{0:02d}_{1:06d}.npy'.format(sequence,idx))
             sem_labels = np.load(sem_path)
             
             # Load the unknown instance predictions
-            unknown_ins_path = os.path.join(prediction_path, '{0:02d}_{1:07d}_{2:s}.npy'.format(sequence, idx, inst_ext))
+            unknown_ins_path = os.path.join(prediction_path, '{0:02d}_{1:06d}_{2:s}.npy'.format(sequence, idx, inst_ext))
             unknown_ins_labels = np.load(unknown_ins_path)
             
             
             # Load /create the tracked unknown predictions
-            unknown_track_path = os.path.join(save_dir, '{0:02d}_{1:07d}_t.npy'.format(sequence,idx))
+            unknown_track_path = os.path.join(save_dir, '{0:02d}_{1:06d}_t.npy'.format(sequence,idx))
             unknown_track_labels = unknown_ins_labels.copy()
             
             # Load the points and project them to camera coordinates

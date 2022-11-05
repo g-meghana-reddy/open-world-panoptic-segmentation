@@ -54,6 +54,8 @@ def main(FLAGS):
     elif task_set == 1:
         unknown_sem_label = 10
     elif task_set == 2:
+        unknown_sem_label = 16
+    else:
         unknown_sem_label = 0
 
     if FLAGS.baseline:
