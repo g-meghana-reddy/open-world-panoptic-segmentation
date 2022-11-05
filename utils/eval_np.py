@@ -166,6 +166,10 @@ class PanopticEval:
     rq_all = self.pan_tp.astype(np.double) / np.maximum(
         self.pan_tp.astype(np.double) + 0.5 * self.pan_fp.astype(np.double) + 0.5 * self.pan_fn.astype(np.double),
         self.eps)
+    uq_all = sq_all * self.pan_tp.astype(np.double) / np.maximum(
+      self.pan_tp.astype(np.double) + self.pan_fn.astype(np.double),
+      self.eps
+    )
     pq_all = sq_all * rq_all
 
     # then do the REAL mean (no ignored classes)
@@ -173,7 +177,7 @@ class PanopticEval:
     RQ = rq_all[self.include].mean()
     PQ = pq_all[self.include].mean()
 
-    return PQ, SQ, RQ, pq_all, sq_all, rq_all
+    return PQ, SQ, RQ, pq_all, sq_all, rq_all, uq_all
 
   #############################  Panoptic STUFF ################################
   ##############################################################################

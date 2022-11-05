@@ -209,7 +209,7 @@ if __name__ == '__main__':
   complete_time = time.time() - start_time
 
   # when I am done, print the evaluation
-  class_PQ, class_SQ, class_RQ, class_all_PQ, class_all_SQ, class_all_RQ = class_evaluator.getPQ()
+  class_PQ, class_SQ, class_RQ, class_all_PQ, class_all_SQ, class_all_RQ, class_all_UQ = class_evaluator.getPQ()
   class_IoU, class_all_IoU = class_evaluator.getSemIoU()
 
   # Ani:
@@ -230,6 +230,7 @@ if __name__ == '__main__':
   class_all_PQ = class_all_PQ.flatten().tolist()
   class_all_SQ = class_all_SQ.flatten().tolist()
   class_all_RQ = class_all_RQ.flatten().tolist()
+  class_all_UQ = class_all_UQ.flatten().tolist()
   class_IoU = class_IoU.item()
   # Ani
   class_all_IoU = class_all_IoU.flatten().tolist()
@@ -255,9 +256,9 @@ if __name__ == '__main__':
     stuff = ['road', 'building', 'vegetation', 'fence', 'sidewalk', 'terrain'] # 'pole'
   elif FLAGS.task_set == 2:
     # things = ['car', 'truck', 'bicycle', 'motorcycle', 'other-vehicle', 'person', 'bicyclist', 'motorcyclist']
-    things = ['car', 'truck', 'bicycle', 'motorcycle', 'other-vehicle', 'person']
+    things = ['car', 'truck', 'bicycle', 'motorcycle', 'person', 'unknown']
     stuff = [
-        'road', 'sidewalk', 'parking', 'other-ground', 'building', 'vegetation', 'trunk', 'terrain', 'fence', 'pole',
+        'road', 'sidewalk', 'parking', 'building', 'vegetation', 'trunk', 'terrain', 'fence', 'pole',
         'traffic-sign'
     ]
   else:
@@ -278,7 +279,7 @@ if __name__ == '__main__':
 
   classwise_tables = {}
 
-  for idx, (pq, rq, sq, iou) in enumerate(zip(class_all_PQ, class_all_RQ, class_all_SQ, class_all_IoU)):
+  for idx, (pq, rq, sq, iou, uq) in enumerate(zip(class_all_PQ, class_all_RQ, class_all_SQ, class_all_IoU, class_all_UQ)):
     class_str = class_strings[class_inv_remap[idx]]
     output_dict[class_str] = {}
     output_dict[class_str]["PQ"] = pq
@@ -286,6 +287,7 @@ if __name__ == '__main__':
     output_dict[class_str]["RQ"] = rq
     output_dict[class_str]["IoU"] = iou
     # Ani
+    output_dict[class_str]["UQ"] = uq
     output_dict[class_str]["Prec"] = class_all_Prec[idx]
     output_dict[class_str]["Recall"] = class_all_Recall[idx]
   
@@ -311,7 +313,7 @@ if __name__ == '__main__':
   mIoU = output_dict["all"]["IoU"]
   known_IoU = np.mean([float(output_dict[c]["IoU"]) for c in all_classes if c != 'unknown'])
   # Ani
-  if FLAGS.task_set == 0 or FLAGS.task_set == 1:
+  if FLAGS.task_set in (0, 1, 2):
     PQ_known_things = np.mean([float(output_dict[c]["PQ"]) for c in things if c != 'unknown'])
     PQ_known_stuff = np.mean([float(output_dict[c]["PQ"]) for c in stuff])
 
@@ -324,6 +326,7 @@ if __name__ == '__main__':
     Prec_unknown = output_dict["unknown"]["Prec"]
     Recall_unknown = output_dict["unknown"]["Recall"]
     unknown_IoU = output_dict["unknown"]["IoU"]
+    UQ_unknown = output_dict["unknown"]["UQ"]
 
   codalab_output = {}
   codalab_output["pq_mean"] = float(PQ_all)
@@ -342,7 +345,7 @@ if __name__ == '__main__':
   codalab_output["sq_things"] = float(SQ_things)
   codalab_output["known_IoU"] = float(known_IoU)
   # Ani
-  if FLAGS.task_set == 0 or FLAGS.task_set == 1:
+  if FLAGS.task_set in (0, 1, 2):
     codalab_output["pq_known_things_mean"] = float(PQ_known_things)
     codalab_output["pq_known_stuff_mean"] = float(PQ_known_stuff)
     codalab_output["prec_known_things"] = float(Prec_known_things)
@@ -354,6 +357,7 @@ if __name__ == '__main__':
     codalab_output["prec_unknown"] = float(Prec_unknown)
     codalab_output["recall_unknown"] = float(Recall_unknown)
     codalab_output["unknown_IoU"] = float(unknown_IoU)
+    codalab_output["UQ_unknown"] = float(UQ_unknown)
 
   codalab_output["prec_things"] = float(Prec_things)
   codalab_output["recall_things"] = float(Recall_things)
