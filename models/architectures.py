@@ -418,7 +418,7 @@ class KPFCNN(nn.Module):
         elif config.task_set == 1:
             self.things = 4
         elif config.task_set == 2:
-            self.things = 7
+            self.things = 6
         else:
             self.things = 9
 
