@@ -201,6 +201,7 @@ def validate(cfg, model, val_loader, sem_weights=None):
             cls_pred.extend(cls_pred_label.detach().cpu().numpy())
 
             pos_inds = cls_labels == 1
+            neg_inds = cls_labels == 0
             if pos_inds.sum() != 0:
                 corr_pred_pos += cls_pred_label[pos_inds].sum() / pos_inds.sum()
                 num_batches_pos += 1

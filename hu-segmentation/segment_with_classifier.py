@@ -48,7 +48,6 @@ def evaluate(model, points, features=None):
         if num_points_in_segment < NUM_POINTS:
             extra_idxs = np.random.choice(chosen_idxs, NUM_POINTS - len(chosen_idxs), replace=True)
             chosen_idxs = np.concatenate([chosen_idxs, extra_idxs], axis=0)
-    
     np.random.shuffle(chosen_idxs)
     points = torch.from_numpy(points[chosen_idxs]).cuda().float()
 
@@ -197,7 +196,6 @@ if __name__ == '__main__':
     cfg.USE_SEM_REFINEMENT = args.use_sem_refinement
 
     print("Loading segment classifier from checkpoint")
-    cfg = Config()
     classifier = PointNet2Classification(cfg, in_channels).cuda()
     ckpt = torch.load(args.ckpt)
     classifier.load_state_dict(ckpt["model_state"])
