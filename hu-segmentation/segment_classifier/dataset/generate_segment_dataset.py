@@ -1,8 +1,12 @@
 import argparse
-import signal
 import sys
+import os
+import signal
 
-sys.path.append('../')
+sys.path.append('../../..')
+
+import numpy as np
+import torch
 
 from datasets.SemanticKitti import *
 from models.architectures import KPFCNN
@@ -13,14 +17,20 @@ np.random.seed(0)
 torch.manual_seed(0)
 torch.cuda.manual_seed_all(0)
 
+DATA_DIR = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/"
+OUTPUT_PATH = "/project_data/ramanan/achakrav/4D-PLS/data/segment_dataset_regression"
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=-1)
+    parser.add_argument("-s", "--sequence", help="Sequence ID", type=int, default=8)
     parser.add_argument("-p", "--prev_train_path", help="Directory to load checkpoint", default='4DPLS_original_params_original_repo_nframes1_1e-3')
     parser.add_argument("-i", "--chkp_idx", help="Index of checkpoint", type=int, default=None)
+    parser.add_argument("-g", "--gpu-id", help="GPU ID", type=int, default=0)
     args = parser.parse_args()
     return args
+    
 
 def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on_gpu=True):
     '''Evaluation run on 4DPLS'''
@@ -68,7 +78,9 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
     # dataset saving path
     data_path = None
     if config.saving:
-        data_path = join('segment_dataset')
+        data_path = join(OUTPUT_PATH)
+        if config.task_set > -1:
+            data_path = data_path + "_TS{}".format(config.task_set)
         if not exists(data_path):
             makedirs(data_path)
     
@@ -83,7 +95,7 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
     print('**********************************')
     print('Starting evaluation: Forward pass ')
     print('**********************************')
-    
+
     test_epoch = 0
 
     # Start test loop
@@ -118,6 +130,7 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
             r_inds_list = batch.reproj_inds
             r_mask_list = batch.reproj_masks
             labels_list = batch.val_labels
+            xyz_points = batch.points
             ins_labels_list = batch.val_ins_labels
             centers_output = centers_output.cpu().detach().numpy()
             embedding = embedding.cpu().detach().numpy()
@@ -148,6 +161,8 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
                 probs = stk_probs[i0:i0 + length]
                 # centerness outputs
                 center_props = centers_output[i0:i0 + length]
+                # xyz points w.r.t first frame
+                frame_xyz_points = xyz_points[b_i].cpu().detach().numpy()
                 # embedding outputs
                 emb = embedding[i0:i0 + length]
 
@@ -158,10 +173,8 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
                 proj_center_probs = center_props[proj_inds]
                 # projected embedding outputs
                 proj_emb = emb[proj_inds]
-                # projected labels
-                proj_labels = frame_labels[proj_inds]
-                proj_ins_labels = frame_ins_labels[proj_inds]
-
+                # xyz points
+                proj_xyz_points = frame_xyz_points[proj_inds]
                 # Safe check if only one point:
                 if proj_probs.ndim < 2:
                     proj_probs = np.expand_dims(proj_probs, 0)
@@ -172,10 +185,14 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
                 # Initialize the projected frame wise predictions
                 frame_probs_uint8 = np.zeros((proj_mask.shape[0], nc_model), dtype=np.uint8)
                 frame_probs_softmax = np.zeros((proj_mask.shape[0], nc_model))
-                frame_gt_labels =  np.zeros((proj_mask.shape[0]))
-                frame_gt_ins_labels = np.zeros((proj_mask.shape[0]))
+                # frame_gt_labels =  np.zeros((proj_mask.shape[0]))
+                # frame_gt_ins_labels = np.zeros((proj_mask.shape[0]))
                 frame_center_preds = np.zeros((proj_mask.shape[0]))
                 frame_emb_preds = np.zeros((proj_mask.shape[0], config.first_features_dim), dtype=np.float32)
+                frame_xyz = np.zeros((proj_mask.shape[0], 3), dtype=np.float32)
+                frame_probs = frame_probs_uint8[proj_mask, :].astype(np.float32) / 255
+                frame_probs = test_smooth * frame_probs + (1 - test_smooth) * proj_probs
+                frame_probs_uint8[proj_mask, :] = (frame_probs * 255).astype(np.uint8)
 
                 # Insert false columns for ignored labels
                 frame_probs_uint8_bis = frame_probs_uint8.copy()
@@ -183,32 +200,30 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
                     if label_value in test_loader.dataset.ignored_labels:
                         frame_probs_uint8_bis = np.insert(frame_probs_uint8_bis, l_ind, 0, axis=1)
 
-
-                frame_probs = frame_probs_uint8[proj_mask, :].astype(np.float32) / 255
-                frame_probs = test_smooth * frame_probs + (1 - test_smooth) * proj_probs
-                frame_probs_uint8[proj_mask, :] = (frame_probs * 255).astype(np.uint8)
-
                 # Compute the final frame wise projections
-                frame_gt_labels[proj_mask] = proj_labels
-                frame_gt_ins_labels[proj_mask] = proj_ins_labels
+                frame_gt_labels = frame_labels
+                frame_gt_ins_labels = frame_ins_labels
                 frame_center_preds[proj_mask] = proj_center_probs[:, 0]
                 frame_emb_preds[proj_mask] = proj_emb
                 frame_probs_softmax[proj_mask, :] = proj_probs
+                frame_xyz[proj_mask, :] = proj_xyz_points
                 frame_preds = test_loader.dataset.label_values[np.argmax(frame_probs_uint8_bis,axis=1)].astype(np.int32)
 
-                
                 seq_name = test_loader.dataset.sequences[s_ind]
                 frame_name = test_loader.dataset.frames[s_ind][f_ind]
                 filepath = join(data_path, seq_name, frame_name)
-                scan_file = join('../data/SemanticKitti/sequences', seq_name, 'velodyne', frame_name+'.bin')
+                scan_file = join(DATA_DIR, 'sequences', seq_name, 'velodyne', frame_name + '.bin')
                 
                 # Construct the hierarchical tree per scan for all the thing class points and 
                 # compute scores per segment to generate the segment dataset
                 print("*************** Started constructing tree scan_file: {}_{}  *************** ".format(seq_name, frame_name))
-                generate_segments_per_scan(scan_file, frame_emb_preds, frame_gt_labels, frame_gt_ins_labels, filepath) 
+                # generate_segments_per_scan(scan_file, frame_emb_preds, frame_gt_labels, frame_gt_ins_labels, filepath) 
+                generate_segments_per_scan(
+                    scan_file, frame_emb_preds, frame_preds, frame_gt_labels,
+                    frame_gt_ins_labels, filepath, task_set=config.task_set, frame_xyz=frame_xyz
+                )
                 print("*************** Ended constructing tree scan_file: {}_{}    *************** ".format(seq_name, frame_name))
                 i0 += length
-
 
         # Update minimum od potentials
         new_min = torch.min(test_loader.dataset.potentials)
@@ -224,9 +239,9 @@ def evaluation_4dpls(net, test_loader, config, num_votes=100, chkp_path=None, on
         if last_min > num_votes:
             break
 
-    return  
-    
-def generate_segments_per_scan(scan_file, frame_emb_preds, frame_gt_labels,frame_gt_ins_labels, filepath):
+    return
+
+def generate_segments_per_scan(scan_file, frame_emb_preds, frame_pred_labels, frame_gt_labels, frame_gt_ins_labels, filepath, task_set=-1, frame_xyz=None):
     '''Constructs the hierarchical tree using the thing class points and per 
         node/segment score is computed to generate the segment dataset.'''
     #****************************************************
@@ -238,19 +253,30 @@ def generate_segments_per_scan(scan_file, frame_emb_preds, frame_gt_labels,frame
     #********************************************************************
     # Compute the things mask and compute labels, xyz points accordingly
     #********************************************************************
-    
     # thing classes: [1,2,3,4,5,6,7,8]
-    things_mask = np.where(np.logical_and(frame_gt_labels > 0 , frame_gt_labels < 9))
+    if task_set == -1:
+        num_things = 9
+    elif task_set == 1:
+        num_things = 4
+    elif task_set == 2:
+        num_things = 6
+
+    gt_things_mask = np.where(np.logical_and(frame_gt_labels > 0, frame_gt_labels < num_things))
+    things_mask = np.where(np.logical_and(frame_pred_labels > 0, frame_pred_labels < num_things))
 
     # generate all labels for things only
+    if frame_xyz is not None:
+        first_frame_coordinates = frame_xyz[things_mask]
+    else:
+        first_frame_coordinates = None
     pts_velo_cs_objects = pts_velo_cs[things_mask]
     pts_indexes_objects = pts_indexes[things_mask]
     pts_embeddings_objects = frame_emb_preds[things_mask]
-    gt_instance_ids_objects = frame_gt_ins_labels[things_mask]
-    gt_instance_indexes_objects = np.arange(frame_gt_ins_labels.shape[0])[things_mask]
-    gt_semantic_labels = frame_gt_labels[things_mask]
+    gt_instance_ids_objects = frame_gt_ins_labels[gt_things_mask]
+    gt_instance_indexes_objects = np.arange(frame_gt_ins_labels.shape[0])[gt_things_mask]
+    gt_semantic_labels = frame_gt_labels[gt_things_mask]
 
-    if len(pts_velo_cs_objects) < 1:
+    if len(pts_velo_cs_objects) < 1 or len(gt_semantic_labels) < 1:
         return
     
     # Define the hierarchical DBSCAN thresholds
@@ -259,22 +285,26 @@ def generate_segments_per_scan(scan_file, frame_emb_preds, frame_gt_labels,frame
     #********************************************************************
     # Initialize the TreeSegment class for the current scan
     #********************************************************************
-
+    init_sem_label = np.bincount(gt_semantic_labels).argmax()
     original_indices = np.arange(pts_velo_cs_objects.shape[0])
-    segment_tree = TreeSegment(original_indices, 0)
+    segment_tree = TreeSegment(original_indices, 0, init_sem_label)
     
     #********************************************************************
     # Compute the hierarchical tree of segments
     #********************************************************************
-
-    segment_tree.child_segments = compute_hierarchical_tree(eps_list_tum, pts_velo_cs_objects, pts_indexes_objects, gt_instance_indexes_objects, gt_instance_ids_objects, original_indices)
+    segment_tree.child_segments = compute_hierarchical_tree(
+        eps_list_tum, pts_velo_cs_objects, pts_indexes_objects, gt_instance_indexes_objects,
+        gt_instance_ids_objects, gt_semantic_labels, original_indices)
 
     #********************************************************************
     # Traverse the computed hierarchical tree to store the segments
     #********************************************************************
-    segment_tree_traverse(segment_tree, pts_embeddings_objects, pts_velo_cs_objects, gt_semantic_labels, filepath, 0, set())
-    
+    segment_tree_traverse(
+        segment_tree, pts_embeddings_objects, pts_velo_cs_objects, gt_semantic_labels, 
+        filepath, 0, set(), first_frame_coordinates
+    )
     return
+
 
 if __name__ == '__main__':
 
@@ -285,16 +315,14 @@ if __name__ == '__main__':
     print('Initializing the environment ')
     print('*****************************')
 
+    # Get the command line arguments
+    args = parse_args()
+
     # Set which gpu is going to be used
-    GPU_ID = '4'
-    # if torch.cuda.device_count() > 1:
-    #     GPU_ID = '0, 1'
+    GPU_ID = str(args.gpu_id)
 
     # Set GPU visible device
     os.environ['CUDA_VISIBLE_DEVICES'] = GPU_ID
-
-    # Get the command line arguments
-    args = parse_args()
 
     #****************************************************
     # Step 2: Previous chkp
@@ -308,7 +336,10 @@ if __name__ == '__main__':
     chkp_idx = args.chkp_idx
     if previous_training_path:
         # Find all snapshot in the chosen training folder
-        chkp_path = os.path.join('../','results', previous_training_path, 'checkpoints')
+        if args.task_set == -1:
+            chkp_path = os.path.join("/project_data/ramanan/mganesin/4D-PLS/results", previous_training_path, "checkpoints")
+        else:
+            chkp_path = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/4DPLS_TS{}_updated_vocab/checkpoints".format(args.task_set)
         chkps = [f for f in os.listdir(chkp_path) if f[:4] == 'chkp']
 
         # Find which snapshot to restore
@@ -316,7 +347,7 @@ if __name__ == '__main__':
             chosen_chkp = 'current_chkp.tar'
         else:
             chosen_chkp = np.sort(chkps)[chkp_idx]
-        chosen_chkp = os.path.join('../','results', previous_training_path, 'checkpoints', chosen_chkp)
+        chosen_chkp = os.path.join(chkp_path, chosen_chkp)
     else:
         chosen_chkp = None
 
@@ -330,8 +361,11 @@ if __name__ == '__main__':
     # Initialize configuration class from checkpoint path
     config = SemanticKittiConfig()
     if previous_training_path:
-        config.load(os.path.join('../', 'results', previous_training_path))
-    
+        if args.task_set == -1:
+            config.load(os.path.join('/project_data/ramanan/achakrav/4D-PLS/results', previous_training_path))
+        else:
+            config.load('/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/4DPLS_TS{}_updated_vocab'.format(args.task_set))
+
     # Set the other configuration parameters to match the training config
     config.free_dim = 4
     config.n_frames = 1
@@ -355,27 +389,18 @@ if __name__ == '__main__':
     print('*********************************************')
 
     # Initialize datasets
-    training_dataset = SemanticKittiDataset(config, set='training',
-                                              balance_classes=False, datapath= '../data/SemanticKitti')
-    test_dataset = SemanticKittiDataset(config, set='validation',
-                                        balance_classes=False, seqential_batch = True, datapath= '../data/SemanticKitti')
+    test_dataset = SemanticKittiDataset(
+        config, set='validation', sequence=args.sequence, balance_classes=False, seqential_batch=True, datapath=DATA_DIR)
 
     # Initialize samplers
-    training_sampler = SemanticKittiSampler(training_dataset)
     test_sampler = SemanticKittiSampler(test_dataset)
 
     # Initialize the dataloader
-    training_loader = DataLoader(training_dataset,
-                                 batch_size=1,
-                                 sampler=training_sampler,
-                                 collate_fn=SemanticKittiCollate,
-                                 num_workers=0,#config.input_threads,
-                                 pin_memory=True)
     test_loader = DataLoader(test_dataset,
                              batch_size=1,
                              sampler=test_sampler,
                              collate_fn=SemanticKittiCollate,
-                             num_workers=0,#config.input_threads,
+                             num_workers=0, #config.input_threads,
                              pin_memory=True)
 
     #****************************************************
@@ -386,11 +411,9 @@ if __name__ == '__main__':
     print('********************')
 
     # Calibrate max_in_point value
-    training_sampler.calib_max_in(config, training_loader, verbose=True)
     test_sampler.calib_max_in(config, test_loader, verbose=True)
 
     # Calibrate samplers
-    training_sampler.calibration(training_loader, verbose=True)
     test_sampler.calibration(test_loader, verbose=True)
 
     #****************************************************
@@ -414,8 +437,3 @@ if __name__ == '__main__':
 
     print('Forcing exit now')
     os.kill(os.getpid(), signal.SIGINT)
-
-
-
-
-

@@ -8,8 +8,16 @@ data/
 wandb/
 **.ipynb_checkpoints
 **__pycache__
+
 scripts/
 outputs/
 slurm_logs/
 test/
 segment_classifier/segment_dataset
+
+# Point RCNN
+**/build
+**/*.egg-info
+**/dist
+segment_classifier/segment_dataset
+hu-segmentation/segment_classifier/segment_dataset/*

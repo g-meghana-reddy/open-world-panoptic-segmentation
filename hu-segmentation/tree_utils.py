@@ -28,6 +28,17 @@ def flatten_scores(scores):
         else: flat_scores.extend(flatten_scores(score))
     return flat_scores
 
+def flatten_labels(labels):
+    # labels could be nested list, we convert them to list of label
+    if isinstance(labels, int): return labels
+    # instead of using deepflatten, i will write my own flatten function
+    # because i am not sure how deepflatten iterates (depth-first or breadth-first)
+    flat_labels = []
+    for label in labels:
+        if isinstance(label, int): flat_labels.append(label)
+        else: flat_labels.extend(flatten_labels(label))
+    return flat_labels
+
 class Segment():
   def __init__(self, indices, score):
     self.indices = indices
