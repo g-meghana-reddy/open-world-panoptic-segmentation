@@ -58,7 +58,7 @@ class Config:
     EPOCHS = 200
     BATCH_SIZE = 512
     N_POINTS = 1024
-    USE_WANDB = False
+    USE_WANDB = True
 
     PRETRAIN = 0.0
 
