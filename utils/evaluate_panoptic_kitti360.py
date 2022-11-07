@@ -139,7 +139,7 @@ if __name__ == '__main__':
 
   # get test set
   # test_sequences = DATA["split"][FLAGS.split]
-  test_sequences = ['02']
+  test_sequences = ['03', '05', '07']
 
   # get label paths
   label_names = []
@@ -191,7 +191,9 @@ if __name__ == '__main__':
     # building has instance labels in KITTI-360
     if FLAGS.task_set == 1:
       building_mask = u_label_sem_class == 6
-      u_label_inst[building_mask] = 3200
+    elif FLAGS.task_set == 2:
+        building_mask = u_label_sem_class == 9
+    u_label_inst[building_mask] = 3200
 
     label = np.fromfile(pred_file, dtype=np.uint32)
 
@@ -255,10 +257,10 @@ if __name__ == '__main__':
     things = ['car', 'person', 'truck', 'catch-all']
     stuff = ['road', 'building', 'vegetation', 'fence', 'sidewalk', 'terrain']
   elif FLAGS.task_set == 2:
-    things = ['car', 'truck', 'bicycle', 'motorcycle', 'person', 'unknown']
+    things = ['car', 'truck', 'bicycle', 'motorcycle', 'person', 'catch-all']
     stuff = [
-        'road', 'sidewalk', 'parking', 'building', 'vegetation', 'trunk', 'terrain', 'fence', 'pole',
-        'traffic-sign'
+        'road', 'sidewalk', 'parking', 'building', 'vegetation', 'terrain', 'fence', 'pole',
+        'traffic sign'
     ]
   all_classes = things + stuff
 
