@@ -122,7 +122,9 @@ if __name__ == '__main__':
     if args.task_set == 0:
         unk_labels = [7]
     elif args.task_set == 1:
-        unk_label = [10]
+        unk_labels = [10]
+    elif args.task_set == 2:
+        unk_labels = [16]
     elif args.task_set == -1:
         unk_labels = range(1,9)
     else:
@@ -135,7 +137,7 @@ if __name__ == '__main__':
 
         if args.task_set == -1:
             config = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti-orig.yaml"
-        elif args.task_set == 1:
+        elif args.task_set in (1, 2):
             config = "/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/semantic-kitti.yaml"
         with open(config, 'r') as stream:
             doc = yaml.safe_load(stream)
@@ -168,6 +170,28 @@ if __name__ == '__main__':
         scan_files = sorted([
             os.path.join(scan_folder, file_id + '.bin') for file_id in file_ids
         ])
+
+        if args.task_set == -1:
+            config = "/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/kitti-360-orig.yaml"
+        elif args.task_set in (1, 2):
+            config = "/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/kitti-360.yaml"
+        with open(config, 'r') as stream:
+            doc = yaml.safe_load(stream)
+            all_labels = doc['labels']
+            if args.task_set == -1:
+                learning_map_inv = doc['learning_map_inv']
+                learning_map_doc = doc['learning_map']
+            else:
+                learning_map_inv = doc['task_set_map'][args.task_set]['learning_map_inv']
+                learning_map_doc = doc['task_set_map'][args.task_set]['learning_map']
+            learning_map = np.zeros((np.max([k for k in learning_map_doc.keys()]) + 1), dtype=np.int32)
+            for k, v in learning_map_doc.items():
+                learning_map[k] = v
+
+            inv_learning_map = np.zeros((np.max([k for k in learning_map_inv.keys()]) + 1), 
+                                dtype=np.int32)
+            for k, v in learning_map_inv.items():
+                inv_learning_map[k] = v
         
     objsem_folder = args.objsem_folder
     objsem_files = load_paths(objsem_folder)

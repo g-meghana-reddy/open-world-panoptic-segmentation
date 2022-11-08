@@ -154,7 +154,8 @@ if __name__ == '__main__':
   # get predictions paths
   pred_names = []
   for sequence in test_sequences:
-    sequence = "2013_05_28_drive_{:04d}_sync".format(int(sequence))
+    # sequence = "2013_05_28_drive_{:04d}_sync".format(int(sequence))
+    sequence = "sequences/{:02d}".format(int(sequence))
     pred_paths = os.path.join(FLAGS.predictions, sequence, "predictions")
     # populate the label names
     seq_pred_names = sorted([os.path.join(pred_paths, fn) for fn in os.listdir(pred_paths) if fn.endswith(".label")])
@@ -191,9 +192,12 @@ if __name__ == '__main__':
     # building has instance labels in KITTI-360
     if FLAGS.task_set == 1:
       building_mask = u_label_sem_class == 6
+      u_label_inst[building_mask] = 3200
+    # building, traffic sign, and pole have instance labels in KITTI-360
     elif FLAGS.task_set == 2:
-        building_mask = u_label_sem_class == 9
-    u_label_inst[building_mask] = 3200
+      for cls_ in (9, 14, 15):
+          mask = u_label_sem_class == cls_
+          u_label_inst[mask] = cls_ * 10
 
     label = np.fromfile(pred_file, dtype=np.uint32)
 

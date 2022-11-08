@@ -176,16 +176,17 @@ if __name__ == '__main__':
     args = parse_args()
 
     if args.task_set == 0:
-        # unk_labels = [1, 2]
-        unk_labels = [7]
+        known_labels = [1, 2]
+        unk_label = 7
     elif args.task_set == 1:
-        # unk_labels = [1, 2, 3]
-        unk_labels = [10]
+        known_labels = [1, 2, 3]
+        unk_label = 10
     elif args.task_set == 2:
-        # unk_labels = [1, 2, 3, 4, 5]
-        unk_labels = [16]
+        known_labels = [1, 2, 3, 4, 5]
+        unk_label = 16
     elif args.task_set == -1:
-        unk_labels = range(1, 9)
+        known_labels = range(1, 9)
+        unk_label = 1 # dummy unknown label
     else:
         raise ValueError('Unknown task set: {}'.format(args.task_set))
 
@@ -320,8 +321,12 @@ if __name__ == '__main__':
     for idx in tqdm(range(len(objectness_files))):
         segmented_dir = "{}/sequences/{:02d}/predictions/".format(
             args.save_dir, args.sequence)
+        majority_segmented_dir =  "{}_majority_vote/sequences/{:02d}/predictions/".format(
+            args.save_dir, args.sequence)
         if not os.path.exists(segmented_dir):
             os.makedirs(segmented_dir)
+        if not os.path.exists(majority_segmented_dir):
+            os.makedirs(majority_segmented_dir)
 
         # load scan
         scan_file = scan_files[idx]
@@ -335,6 +340,7 @@ if __name__ == '__main__':
         # labels
         label_file = semantic_files[idx]
         labels = np.load(label_file)
+        labels_majority = labels.copy()
 
         # instances to overwrite
         instance_file = instance_files[idx]
@@ -347,10 +353,8 @@ if __name__ == '__main__':
         else:
             semantic_features = None
 
-        if len(unk_labels) == 1:
-            mask = np.where(labels == unk_labels[0])
-        else:
-            mask = np.where(np.logical_and(labels > 0, labels < np.max(unk_labels)))
+        thing_mask = np.logical_or(labels == unk_label, labels < np.max(known_labels))
+        mask = np.where(np.logical_and(labels > 0, thing_mask))
 
         pts_velo_cs_objects = pts_velo_cs[mask]
         objectness_objects = objectness[mask]  # todo: change objectness_objects into a local variable
@@ -365,6 +369,13 @@ if __name__ == '__main__':
             instances = np.left_shift(instances.astype(np.int32), 16)
             new_preds = np.bitwise_or(instances, inv_sem_labels)
             new_preds.tofile('{}/{:07d}.label'.format(segmented_dir, idx))
+
+            # Create .label files using the updated instance and semantic labels
+            sem_labels = labels_majority.astype(np.int32)
+            inv_sem_labels = inv_learning_map[sem_labels]
+            instances = np.left_shift(instances.astype(np.int32), 16)
+            new_preds = np.bitwise_or(instances, inv_sem_labels)
+            new_preds.tofile('{}/{:07d}.label'.format(majority_segmented_dir, idx))
             continue
 
         # mask out 4dpls instance predictions
@@ -394,6 +405,8 @@ if __name__ == '__main__':
         new_instance = instances.max() + 1
         for id_, indices in enumerate(mapped_indices):
             instances[indices] = new_instance + id_
+            if flat_sem_labels[id_] != -1:
+                labels_majority[indices] = np.bincount(labels_majority[indices]).argmax()
 
         # Create .label files using the updated instance and semantic labels
         sem_labels = labels.astype(np.int32)
@@ -401,3 +414,10 @@ if __name__ == '__main__':
         instances = np.left_shift(instances.astype(np.int32), 16)
         new_preds = np.bitwise_or(instances, inv_sem_labels)
         new_preds.tofile('{}/{:07d}.label'.format(segmented_dir, idx))
+
+        # Create .label files using the updated instance and semantic labels
+        sem_labels = labels_majority.astype(np.int32)
+        inv_sem_labels = inv_learning_map[sem_labels]
+        instances = np.left_shift(instances.astype(np.int32), 16)
+        new_preds = np.bitwise_or(instances, inv_sem_labels)
+        new_preds.tofile('{}/{:07d}.label'.format(majority_segmented_dir, idx))
