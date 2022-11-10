@@ -193,6 +193,16 @@ if __name__ == '__main__':
       u_label_sem_cat = u_label_sem_cat[:FLAGS.limit]
       u_label_inst = u_label_inst[:FLAGS.limit]
 
+    # don't penalize stuff within the other class
+    if FLAGS.task_set in (1, 2):
+      if FLAGS.task_set == 1:
+        unknown_stuff_classes = (44, 49, 52, 71, 80, 81, 99)
+      else:
+        unknown_stuff_classes = (49, 52, 99)
+      mask = np.zeros_like(u_label_inst, dtype=bool)
+      for cls_ in unknown_stuff_classes:
+        mask = np.logical_or(mask, (label & 0xFFFF) == cls_)
+
     label = np.fromfile(pred_file, dtype=np.uint32)
     
     u_pred_sem_class = class_lut[label & 0xFFFF]  # remap to xentropy format
@@ -201,6 +211,10 @@ if __name__ == '__main__':
       u_pred_sem_class = u_pred_sem_class[:FLAGS.limit]
       u_pred_sem_cat = u_pred_sem_cat[:FLAGS.limit]
       u_pred_inst = u_pred_inst[:FLAGS.limit]
+
+    if FLAGS.task_set in (1, 2):
+      u_label_inst[mask] = -1
+      u_pred_inst[mask] = -1
 
     class_evaluator.addBatch(u_pred_sem_class, u_pred_inst, u_label_sem_class, u_label_inst)
 

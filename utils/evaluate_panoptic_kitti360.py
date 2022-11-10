@@ -154,8 +154,8 @@ if __name__ == '__main__':
   # get predictions paths
   pred_names = []
   for sequence in test_sequences:
-    # sequence = "2013_05_28_drive_{:04d}_sync".format(int(sequence))
-    sequence = "sequences/{:02d}".format(int(sequence))
+    sequence = "2013_05_28_drive_{:04d}_sync".format(int(sequence))
+    # sequence = "sequences/{:02d}".format(int(sequence))
     pred_paths = os.path.join(FLAGS.predictions, sequence, "predictions")
     # populate the label names
     seq_pred_names = sorted([os.path.join(pred_paths, fn) for fn in os.listdir(pred_paths) if fn.endswith(".label")])
@@ -189,15 +189,15 @@ if __name__ == '__main__':
       u_label_sem_cat = u_label_sem_cat[:FLAGS.limit]
       u_label_inst = u_label_inst[:FLAGS.limit]
 
-    # building has instance labels in KITTI-360
-    if FLAGS.task_set == 1:
-      building_mask = u_label_sem_class == 6
-      u_label_inst[building_mask] = 3200
-    # building, traffic sign, and pole have instance labels in KITTI-360
-    elif FLAGS.task_set == 2:
-      for cls_ in (9, 14, 15):
-          mask = u_label_sem_class == cls_
-          u_label_inst[mask] = cls_ * 10
+    # don't penalize stuff within the other class
+    if FLAGS.task_set in (1, 2):
+      if FLAGS.task_set == 1:
+        unknown_stuff_classes = (6, 9, 10, 12, 15, 16, 35)
+      else:
+        unknown_stuff_classes = (6, 10, 12, 15, 16, 35)
+      mask = np.zeros_like(u_label_inst, dtype=bool)
+      for cls_ in unknown_stuff_classes:
+        mask = np.logical_or(mask, (label & 0xFFFF) == cls_)
 
     label = np.fromfile(pred_file, dtype=np.uint32)
 
@@ -207,6 +207,10 @@ if __name__ == '__main__':
       u_pred_sem_class = u_pred_sem_class[:FLAGS.limit]
       u_pred_sem_cat = u_pred_sem_cat[:FLAGS.limit]
       u_pred_inst = u_pred_inst[:FLAGS.limit]
+
+    if FLAGS.task_set in (1, 2):
+      u_label_inst[mask] = -1
+      u_pred_inst[mask] = -1
 
     class_evaluator.addBatch(u_pred_sem_class, u_pred_inst, u_label_sem_class, u_label_inst)
 
