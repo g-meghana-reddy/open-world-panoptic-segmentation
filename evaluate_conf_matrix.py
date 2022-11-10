@@ -61,7 +61,7 @@ def parse_args():
     parser.add_argument("-i", "--chkp_idx", help="Index of checkpoint",  default=None)
     parser.add_argument('-sk', "--semantic_kitti", dest='semantic_kitti', action="store_true", default=False)
     parser.add_argument( '-k360', "--kitti360", dest='kitti360', action="store_true", default=False)
-    parser.add_argument("-s", "--seq", help="Sequence number", type=int, default=2)
+    parser.add_argument("-s", "--seq", help="Sequence number", type=int, default=8)
     args = parser.parse_args()
     return args
 
@@ -79,12 +79,12 @@ if __name__ == '__main__':
     ############################
 
     # Set which gpu is going to be used
-    GPU_ID = '5'
-    # if torch.cuda.device_count() > 1:
-    #     GPU_ID = '0, 1'
+    # GPU_ID = '5'
+    # # if torch.cuda.device_count() > 1:
+    # #     GPU_ID = '0, 1'
 
-    # Set GPU visible device
-    os.environ['CUDA_VISIBLE_DEVICES'] = GPU_ID
+    # # Set GPU visible device
+    # os.environ['CUDA_VISIBLE_DEVICES'] = GPU_ID
 
     args = parse_args()
 
@@ -99,7 +99,7 @@ if __name__ == '__main__':
     chkp_idx = args.chkp_idx
 
     # Find all snapshot in the chosen training folder
-    chkp_path = os.path.join('results', previous_training_path, 'checkpoints')
+    chkp_path = os.path.join('results', 'checkpoints', previous_training_path, 'checkpoints')
     chkps = [f for f in os.listdir(chkp_path) if f[:4] == 'chkp']
 
     # Find which snapshot to restore
@@ -107,7 +107,7 @@ if __name__ == '__main__':
         chosen_chkp = 'current_chkp.tar'
     else:
         chosen_chkp = np.sort(chkps)[chkp_idx]
-    chosen_chkp = os.path.join('results', previous_training_path, 'checkpoints', chosen_chkp)
+    chosen_chkp = os.path.join('results', 'checkpoints', previous_training_path, 'checkpoints', chosen_chkp)
 
     ##############
     # Prepare Data
@@ -125,7 +125,7 @@ if __name__ == '__main__':
         config = Kitti360Config()
 
     if previous_training_path:
-        config.load(os.path.join('results', previous_training_path))
+        config.load(os.path.join('results', 'checkpoints', previous_training_path))
         config.saving_path = None
     config.pre_train = False # True
     config.free_dim = 4
@@ -150,7 +150,7 @@ if __name__ == '__main__':
 
     config.task_set = args.task_set
     
-    if config.task_set in [0,1]:
+    if config.task_set in [0,1,2]:
         return_unknowns = True
     else:
         return_unknowns = False
@@ -212,9 +212,7 @@ if __name__ == '__main__':
 
     val_label_values = test_loader.dataset.label_values
     num_classes = len(val_label_values)
-    
     for batch in tqdm(test_loader):
-
         if torch.cuda.device_count() >= 1:
             net.to(torch.cuda.current_device())
             batch.to(torch.cuda.current_device())
@@ -231,7 +229,7 @@ if __name__ == '__main__':
         r_inds_list = batch.reproj_inds
         r_mask_list = batch.reproj_masks
         labels_list = batch.val_labels
-        if config.task_set in [0,1]:
+        if config.task_set in [0,1,2]:
             unknown_labels_list = batch.val_unk_labels_list
             unknown_label_values = list(test_dataset.unknown_label_to_names.keys())
             num_unknown_classes = len(unknown_label_values)
@@ -242,7 +240,7 @@ if __name__ == '__main__':
             proj_inds = r_inds_list[b_i]
             proj_mask = r_mask_list[b_i]
             frame_labels = labels_list[b_i]
-            if config.task_set in [0,1]:
+            if config.task_set in [0,1,2]:
                 frame_unknown_labels = unknown_labels_list[b_i]
 
             # Project predictions on the frame points
@@ -262,21 +260,21 @@ if __name__ == '__main__':
 
             predictions += [preds]
             true_mapped_labels += [frame_labels[proj_mask]]
-            if config.task_set in [0,1]:
+            if config.task_set in [0,1, 2]:
                 true_unmapped_labels += [frame_unknown_labels[proj_mask]]
 
 
     print('\nCreate confusion matrix')
     print('**************')
 
-    if args.task_set == 0:
+    if args.task_set == 1:
         k = 6
-    elif args.task_set == 1:
+    elif args.task_set == 2:
         k = 10
     else:
         k = 19
         
-    if args.task_set == 2:
+    if args.task_set == -1:
         conf_matrix_1 = sklearn.metrics.confusion_matrix(
             np.concatenate(true_mapped_labels), 
             np.concatenate(predictions), 
@@ -300,7 +298,7 @@ if __name__ == '__main__':
     conf_matrix_1 = np.delete(conf_matrix_1, 0, axis=1)
     
     # Balance with real validation proportions
-    if args.task_set == 2:
+    if args.task_set == -1:
         conf_matrix_1 = conf_matrix_1.T
         conf_matrix_1 = conf_matrix_1.astype(np.float64)
         conf_matrix_1 /= np.expand_dims((np.sum(conf_matrix_1, axis=1) + 1e-6), 0)
@@ -313,7 +311,7 @@ if __name__ == '__main__':
         plt.ylabel('Detected Class')
         plt.subplots_adjust(bottom=0.15)
         plt.show()
-        plt.savefig('results/confusion_matrix_ts{}_{}_balanced.png'.format(args.task_set, dataset_name))
+        plt.savefig('results/updated_confusion_matrix_ts{}_{}_balanced.png'.format(args.task_set, dataset_name))
     
     else:
         # Unknown to known confusion
@@ -334,7 +332,7 @@ if __name__ == '__main__':
         plt.ylabel('Detected Class')
         plt.subplots_adjust(bottom=0.15)
         plt.show()
-        plt.savefig('results/extended_confusion_matrix_ts{}_{}_balanced.png'.format(args.task_set, dataset_name))
+        plt.savefig('results/updated_extended_confusion_matrix_ts{}_{}_balanced.png'.format(args.task_set, dataset_name))
         
         # Known to Unknown confusion
         conf_matrix = conf_matrix_1.astype(np.float64)
@@ -348,5 +346,5 @@ if __name__ == '__main__':
         plt.ylabel('Detected Class')
         plt.subplots_adjust(bottom=0.15)
         plt.show()
-        plt.savefig('results/normal_confusion_matrix_ts{}_{}_balanced.png'.format(args.task_set, dataset_name))
+        plt.savefig('results/updated_normal_confusion_matrix_ts{}_{}_balanced.png'.format(args.task_set, dataset_name))
     
