@@ -361,7 +361,7 @@ if __name__ == '__main__':
         #     mask = np.where(labels == unk_labels[0])
         # else:
         #     mask = np.where(np.logical_and(labels > 0, labels < np.max(unk_labels)))
-        mask = np.logical_or(labels > 0, labels == unk_labels[0])
+        mask = np.logical_and(labels > 0, labels == unk_labels[0])
         for known_label in known_labels:
             mask = np.logical_or(mask, labels == known_label)
 
