@@ -195,9 +195,12 @@ if __name__ == '__main__':
         unknown_stuff_classes = (6, 9, 10, 12, 15, 16, 35)
       else:
         unknown_stuff_classes = (6, 10, 12, 15, 16, 35)
+      building_mask = (label & 0xFFFF) == 11
       mask = np.zeros_like(u_label_inst, dtype=bool)
       for cls_ in unknown_stuff_classes:
         mask = np.logical_or(mask, (label & 0xFFFF) == cls_)
+
+
 
     label = np.fromfile(pred_file, dtype=np.uint32)
 
@@ -211,6 +214,8 @@ if __name__ == '__main__':
     if FLAGS.task_set in (1, 2):
       u_label_inst[mask] = -1
       u_pred_inst[mask] = -1
+
+      u_label_inst[building_mask] = 3200
 
     class_evaluator.addBatch(u_pred_sem_class, u_pred_inst, u_label_sem_class, u_label_inst)
 
