@@ -148,7 +148,8 @@ if __name__ == '__main__':
 
   # does sequence folder exist?
   scan_paths = os.path.join(FLAGS.dataset, 'data_3d_raw', FLAGS.sequence, 'velodyne_points', 'data/')
-  gt_paths = os.path.join(FLAGS.dataset, 'data_3d_raw_labels', FLAGS.sequence, 'labels')
+  # gt_paths = os.path.join(FLAGS.dataset, 'data_3d_raw_labels', FLAGS.sequence, 'labels')
+  label_folder = os.path.join(FLAGS.dataset, 'data_3d_raw', FLAGS.sequence, 'velodyne_points_labeled')
   if os.path.isdir(scan_paths):
     print("Sequence folder exists! Using sequence from %s" % scan_paths)
   else:

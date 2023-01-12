@@ -68,9 +68,15 @@ class Kitti360Dataset(PointCloudDataset):
 
         # TODO: Validation sequence?
         # Get a list of sequences
+        # if not exists(
+        #     join(self.path, 'data_3d_raw_labels', 
+        #          '2013_05_28_drive_{:04d}_sync'.format(config.sequence), 'labels')):
         if not exists(
-            join(self.path, 'data_3d_raw_labels', 
-                 '2013_05_28_drive_{:04d}_sync'.format(config.sequence), 'labels')):
+            join(self.path, 'data_3d_raw', 
+                 '2013_05_28_drive_{:04d}_sync'.format(config.sequence), 'velodyne_points_labeled')):
+        # if not exists(
+        #     join(self.path, 'data_3d_raw', 
+        #          '2013_05_28_drive_{:04d}_sync'.format(config.sequence), 'velodyne_points_labeled_10cm')):
             raise ValueError('Sequence does not have labels')
         self.sequences = ['2013_05_28_drive_{:04d}_sync'.format(config.sequence)]
 #         if self.set == 'training':
@@ -94,7 +100,9 @@ class Kitti360Dataset(PointCloudDataset):
         self.frames = []
         for seq in self.sequences:
             velo_path = join(self.path, 'data_3d_raw', seq, 'velodyne_points', 'data')
-            label_path = join(self.path, 'data_3d_raw_labels', seq, 'labels')
+            # label_path = join(self.path, 'data_3d_raw_labels', seq, 'labels')
+            label_path = join(self.path, 'data_3d_raw', seq, 'velodyne_points_labeled')
+            # label_path = join(self.path, 'data_3d_raw', seq, 'velodyne_points_labeled_10cm')
 
             frame_ids = set(vf[:-6] for vf in listdir(label_path) if vf.endswith('.label'))
             frames = np.sort([
@@ -339,8 +347,12 @@ class Kitti360Dataset(PointCloudDataset):
                 if self.set == 'test':
                     label_file = None
                 else:
-                    label_folder = join(self.path, 'data_3d_raw_labels', 
-                                        self.sequences[s_ind], 'labels')
+                    label_folder = join(self.path, 'data_3d_raw', 
+                                        self.sequences[s_ind], 'velodyne_points_labeled')
+                    # label_folder = join(self.path, 'data_3d_raw', 
+                    #                     self.sequences[s_ind], 'velodyne_points_labeled_10cm')
+                    # label_folder = join(self.path, 'data_3d_raw_labels', 
+                    #                     self.sequences[s_ind], 'labels')
                     label_file = join(
                         label_folder, self.frames[s_ind][f_ind] + '.label')
 

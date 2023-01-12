@@ -145,7 +145,11 @@ if __name__ == '__main__':
   label_names = []
   for sequence in test_sequences:
     sequence = "2013_05_28_drive_{:04d}_sync".format(int(sequence))
-    label_paths = os.path.join(FLAGS.dataset, "data_3d_raw_labels", sequence, "labels")
+    # label_paths = os.path.join(FLAGS.dataset, "data_3d_raw_labels", sequence, "labels")
+    # 20 cm
+    label_paths = os.path.join(FLAGS.dataset, "data_3d_raw", sequence, "velodyne_points_labeled")
+    # 10 cm
+    # label_paths = os.path.join(FLAGS.dataset, "data_3d_raw", sequence, "velodyne_points_labeled_10cm")
     # populate the label names
     seq_label_names = sorted([os.path.join(label_paths, fn) for fn in os.listdir(label_paths) if fn.endswith(".label")])
     label_names.extend(seq_label_names)
@@ -154,8 +158,8 @@ if __name__ == '__main__':
   # get predictions paths
   pred_names = []
   for sequence in test_sequences:
-    sequence = "2013_05_28_drive_{:04d}_sync".format(int(sequence))
-    # sequence = "sequences/{:02d}".format(int(sequence))
+    # sequence = "2013_05_28_drive_{:04d}_sync".format(int(sequence))
+    sequence = "sequences/{:02d}".format(int(sequence))
     pred_paths = os.path.join(FLAGS.predictions, sequence, "predictions")
     # populate the label names
     seq_pred_names = sorted([os.path.join(pred_paths, fn) for fn in os.listdir(pred_paths) if fn.endswith(".label")])
@@ -164,6 +168,7 @@ if __name__ == '__main__':
 
 
   # check that I have the same number of files
+  import pdb; pdb.set_trace()
   assert (len(label_names) == len(pred_names))
 
   print("Evaluating sequences: ", end="", flush=True)
@@ -199,8 +204,6 @@ if __name__ == '__main__':
       mask = np.zeros_like(u_label_inst, dtype=bool)
       for cls_ in unknown_stuff_classes:
         mask = np.logical_or(mask, (label & 0xFFFF) == cls_)
-
-
 
     label = np.fromfile(pred_file, dtype=np.uint32)
 

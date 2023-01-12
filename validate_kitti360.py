@@ -294,8 +294,12 @@ if __name__ == '__main__':
     config.task_set = args.task_set
     config.saving_path = args.saving_dir
     
-    seq_dir = os.path.join(data_dir, 'data_3d_raw_labels', 
-                           '2013_05_28_drive_{:04d}_sync'.format(args.seq), 'labels')
+    # seq_dir = os.path.join(data_dir, 'data_3d_raw_labels', 
+    #                        '2013_05_28_drive_{:04d}_sync'.format(args.seq), 'labels')
+    seq_dir = os.path.join(data_dir, 'data_3d_raw', 
+                           '2013_05_28_drive_{:04d}_sync'.format(args.seq), 'velodyne_points_labeled')
+    # seq_dir = os.path.join(data_dir, 'data_3d_raw', 
+                        #    '2013_05_28_drive_{:04d}_sync'.format(args.seq), 'velodyne_points_labeled_10cm')
     config.epoch_steps = len(glob.glob(seq_dir + '/*.label'))
     config.validation_size = config.epoch_steps
     config.sequence = args.seq

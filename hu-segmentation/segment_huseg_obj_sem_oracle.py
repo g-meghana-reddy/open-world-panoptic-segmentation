@@ -215,7 +215,8 @@ if __name__ == '__main__':
     elif args.dataset == 'kitti-360':
         seq = '2013_05_28_drive_{:04d}_sync'.format(args.sequence)
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/data_3d_raw/' + seq + '/velodyne_points/data/'
-        label_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/data_3d_raw_labels/' + seq + '/labels/'
+        # label_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/data_3d_raw_labels/' + seq + '/labels/'
+        label_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/data_3d_raw/' + seq + '/velodyne_points_labeled/'
         label_files = glob.glob(label_folder + '/*')
         file_ids = [x.split('/')[-1][:-6] for x in label_files]
         scan_files = sorted([
