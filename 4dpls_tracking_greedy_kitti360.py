@@ -90,7 +90,8 @@ def main(FLAGS):
     for sequence in test_sequences:
         seq_name = '2013_05_28_drive_{:04d}_sync'.format(sequence)
 
-        label_path = os.path.join(dataset, 'data_3d_raw_labels', seq_name, 'labels')
+        # label_path = os.path.join(dataset, 'data_3d_raw_labels', seq_name, 'labels')
+        label_path = os.path.join(dataset, 'data_3d_raw', seq_name, 'velodyne_points_labeled')
         frame_ids = set(vf[:-6] for vf in os.listdir(label_path) if vf.endswith('.label'))
 
         poses_f64 = parse_poses(os.path.join(dataset, 'data_poses', seq_name, 'poses.txt'), calib, frame_ids)
@@ -106,7 +107,8 @@ def main(FLAGS):
             os.makedirs(seq_save_dir)
 
         point_names = []
-        label_path = os.path.join(dataset, 'data_3d_raw_labels', seq_name, 'labels')
+        # label_path = os.path.join(dataset, 'data_3d_raw_labels', seq_name, 'labels')
+        label_path = os.path.join(dataset, 'data_3d_raw', seq_name, 'velodyne_points_labeled')
         point_path = os.path.join(dataset, 'data_3d_raw', seq_name, 'velodyne_points', 'data')
 
         # populate the label names
