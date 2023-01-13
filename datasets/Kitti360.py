@@ -822,11 +822,12 @@ class Kitti360Dataset(PointCloudDataset):
         TrVeloToCam = np.linalg.inv(TrCamToVelo)
         TrWorldToCamFrame0 = None # first frame pose (inverse)
 
-        poses = []
+        poses, pose_idx = [], []
         with open(filename, 'r') as f:
             for line in f.readlines():
                 values = [float(v) for v in line.strip().split()]
                 idx = '{:010d}'.format(int(values[0]))
+                pose_idx.append(idx)
                 if idx not in seq_frames:
                     continue
                 TrCamToWorld = np.eye(4)
@@ -843,5 +844,7 @@ class Kitti360Dataset(PointCloudDataset):
                     TrWorldToCamFrame0 = np.linalg.inv(TrCamToWorld)
                     pose = np.eye(4)
                 poses.append(pose)
+        # neglect frames for which poses are not present
+        self.frames[seq_idx] = np.sort(list(seq_frames.intersection(pose_idx)))
         return poses
         
