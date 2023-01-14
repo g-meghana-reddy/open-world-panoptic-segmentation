@@ -141,6 +141,18 @@ if __name__ == '__main__':
   # test_sequences = DATA["split"][FLAGS.split]
   test_sequences = ['03', '05', '07']
 
+  # get predictions paths
+  pred_names, file_ids = [], {}
+  for sequence in test_sequences:
+    sequence_id = "2013_05_28_drive_{:04d}_sync".format(int(sequence))
+    sequence = "sequences/{:02d}".format(int(sequence))
+    pred_paths = os.path.join(FLAGS.predictions, sequence, "predictions")
+    # populate the label names
+    seq_pred_names = sorted([os.path.join(pred_paths, fn) for fn in os.listdir(pred_paths) if fn.endswith(".label")])
+    pred_names.extend(seq_pred_names)
+    file_ids[sequence_id] = set([int(fn[:-6]) for fn in os.listdir(pred_paths)])
+  # print(pred_names)
+
   # get label paths
   label_names = []
   for sequence in test_sequences:
@@ -151,24 +163,14 @@ if __name__ == '__main__':
     # 10 cm
     # label_paths = os.path.join(FLAGS.dataset, "data_3d_raw", sequence, "velodyne_points_labeled_10cm")
     # populate the label names
-    seq_label_names = sorted([os.path.join(label_paths, fn) for fn in os.listdir(label_paths) if fn.endswith(".label")])
+    seq_label_names = sorted([
+      os.path.join(label_paths, fn) for fn in os.listdir(label_paths) 
+      if fn.endswith(".label") and int(fn[:-6]) in file_ids[sequence]
+    ])
     label_names.extend(seq_label_names)
   # print(label_names)
 
-  # get predictions paths
-  pred_names = []
-  for sequence in test_sequences:
-    # sequence = "2013_05_28_drive_{:04d}_sync".format(int(sequence))
-    sequence = "sequences/{:02d}".format(int(sequence))
-    pred_paths = os.path.join(FLAGS.predictions, sequence, "predictions")
-    # populate the label names
-    seq_pred_names = sorted([os.path.join(pred_paths, fn) for fn in os.listdir(pred_paths) if fn.endswith(".label")])
-    pred_names.extend(seq_pred_names)
-  # print(pred_names)
-
-
   # check that I have the same number of files
-  import pdb; pdb.set_trace()
   assert (len(label_names) == len(pred_names))
 
   print("Evaluating sequences: ", end="", flush=True)
