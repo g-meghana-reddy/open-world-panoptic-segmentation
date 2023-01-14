@@ -198,6 +198,17 @@ if __name__ == '__main__':
     else:
         raise ValueError('Unknown task set: {}'.format(args.task_set))
 
+    objsem_folder = args.objsem_folder
+    objsem_files = load_paths(objsem_folder)
+    if args.dataset == "kitti-360":
+        objsem_files = np.array(sorted([
+            file for file in objsem_files
+            if "{:04d}_sync".format(args.sequence) in file
+        ]))
+        file_ids = set([
+            file.split("/")[-1][27:37] for file in objsem_files
+        ])
+
     if args.use_sem_refinement:
         in_channels = 256 # 0
         args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats_sem_refinement_weighted/checkpoints/epoch_200.pth"
@@ -259,9 +270,8 @@ if __name__ == '__main__':
         seq = '2013_05_28_drive_{:04d}_sync'.format(args.sequence)
         scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/data_3d_raw/' + seq + '/velodyne_points/data/'
         # label_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/data_3d_raw_labels/' + seq + '/labels/'
-        label_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/data_3d_raw/' + seq + '/velodyne_points_labeled/'
-        label_files = glob.glob(label_folder + '/*')
-        file_ids = [x.split('/')[-1][:-6] for x in label_files]
+        # label_files = glob.glob(label_folder + '/*')
+        # file_ids = [x.split('/')[-1][:-6] for x in label_files]
         scan_files = sorted([
             os.path.join(scan_folder, file_id + '.bin') for file_id in file_ids
         ])
@@ -288,14 +298,6 @@ if __name__ == '__main__':
                                 dtype=np.int32)
             for k, v in learning_map_inv.items():
                 inv_learning_map[k] = v
-        
-    objsem_folder = args.objsem_folder
-    objsem_files = load_paths(objsem_folder)
-    if args.dataset == "kitti-360":
-        objsem_files = np.array(sorted([
-            file for file in objsem_files
-            if "{:04d}_sync".format(args.sequence) in file
-        ]))
 
     sem_file_mask = []
     obj_file_mask = []
