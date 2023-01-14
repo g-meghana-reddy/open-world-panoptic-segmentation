@@ -27,11 +27,12 @@ def parse_poses(filename, calibration, seq_frames):
         list
             list of poses as 4x4 numpy arrays. (velo -> world)
     """
-    poses = []
+    poses, pose_idx = [], []
     with open(filename, 'r') as f:
         for line in f.readlines():
             values = [float(v) for v in line.strip().split()]
             idx = '{:010d}'.format(int(values[0]))
+            pose_idx.append(idx)
             if idx not in seq_frames:
                 continue
             pose = np.eye(4)
@@ -39,7 +40,7 @@ def parse_poses(filename, calibration, seq_frames):
             pose[1, 0:4] = values[5:9]
             pose[2, 0:4] = values[9:13]
             poses.append(calibration.T.dot(pose))
-    return poses
+    return poses, set(pose_idx)
 
 
 def main(FLAGS):
@@ -85,7 +86,7 @@ def main(FLAGS):
     calib[:-1] = np.loadtxt(calib_file, dtype=np.float32).reshape(-1, 4)
 
     test_sequences = FLAGS.sequences
-    poses = []
+    poses, pose_idxs = [], {}
     # TODO: change this
     for sequence in test_sequences:
         seq_name = '2013_05_28_drive_{:04d}_sync'.format(sequence)
@@ -94,7 +95,8 @@ def main(FLAGS):
         label_path = os.path.join(dataset, 'data_3d_raw', seq_name, 'velodyne_points_labeled')
         frame_ids = set(vf[:-6] for vf in os.listdir(label_path) if vf.endswith('.label'))
 
-        poses_f64 = parse_poses(os.path.join(dataset, 'data_poses', seq_name, 'poses.txt'), calib, frame_ids)
+        poses_f64, pose_idx = parse_poses(os.path.join(dataset, 'data_poses', seq_name, 'poses.txt'), calib, frame_ids)
+        pose_idxs[seq_name] = pose_idx
         poses.append([pose.astype(np.float32) for pose in poses_f64])
 
     total_time = 0.0
@@ -102,7 +104,7 @@ def main(FLAGS):
         seq_name = '2013_05_28_drive_{:04d}_sync'.format(sequence)
 
         # output directory to write label files
-        seq_save_dir = '{0:s}/{1:s}/predictions/'.format(save_dir, seq_name)
+        seq_save_dir = '{0:s}/{1:02d}/predictions/'.format(save_dir, sequence)
         if not os.path.exists(seq_save_dir):
             os.makedirs(seq_save_dir)
 
@@ -115,7 +117,7 @@ def main(FLAGS):
         frame_ids = set(vf[:-6] for vf in os.listdir(label_path) if vf.endswith('.label'))
         seq_point_names = sorted([
             os.path.join(point_path, fn) for fn in os.listdir(point_path) 
-            if fn.endswith(".bin") and fn[:-4] in frame_ids
+            if fn.endswith(".bin") and fn[:-4] in frame_ids.intersection(pose_idxs[seq_name])
         ])
         point_names.extend(seq_point_names)
 
