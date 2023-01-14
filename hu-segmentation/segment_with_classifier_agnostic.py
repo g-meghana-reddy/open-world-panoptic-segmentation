@@ -275,6 +275,7 @@ if __name__ == '__main__':
         scan_files = sorted([
             os.path.join(scan_folder, file_id + '.bin') for file_id in file_ids
         ])
+        file_ids = sorted(list(file_ids))
 
         if args.task_set == -1:
             config = "/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/kitti-360-orig.yaml"
@@ -373,6 +374,9 @@ if __name__ == '__main__':
         pts_indexes_objects = pts_indexes[mask]
 
         assert (len(pts_velo_cs_objects) == len(objectness_objects))
+
+        if args.dataset == "kitti-360":
+            idx = int(file_ids[idx])
 
         if len(pts_velo_cs_objects) < 1:
             # Create .label files using the updated instance and semantic labels
