@@ -159,9 +159,9 @@ if __name__ == '__main__':
     sequence = "2013_05_28_drive_{:04d}_sync".format(int(sequence))
     # label_paths = os.path.join(FLAGS.dataset, "data_3d_raw_labels", sequence, "labels")
     # 20 cm
-    label_paths = os.path.join(FLAGS.dataset, "data_3d_raw", sequence, "velodyne_points_labeled")
+    # label_paths = os.path.join(FLAGS.dataset, "data_3d_raw", sequence, "velodyne_points_labeled")
     # 10 cm
-    # label_paths = os.path.join(FLAGS.dataset, "data_3d_raw", sequence, "velodyne_points_labeled_10cm")
+    label_paths = os.path.join(FLAGS.dataset, "data_3d_raw", sequence, "velodyne_points_labeled_10cm")
     # populate the label names
     seq_label_names = sorted([
       os.path.join(label_paths, fn) for fn in os.listdir(label_paths) 
