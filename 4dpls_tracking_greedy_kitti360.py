@@ -104,7 +104,7 @@ def main(FLAGS):
         seq_name = '2013_05_28_drive_{:04d}_sync'.format(sequence)
 
         # output directory to write label files
-        seq_save_dir = '{0:s}/{1:02d}/predictions/'.format(save_dir, sequence)
+        seq_save_dir = '{0:s}/sequences/{1:02d}/predictions/'.format(save_dir, sequence)
         if not os.path.exists(seq_save_dir):
             os.makedirs(seq_save_dir)
 
