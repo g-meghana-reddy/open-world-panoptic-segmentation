@@ -190,7 +190,7 @@ if __name__ == '__main__':
         if args.dataset == "semantic-kitti":
             known_labels = [1, 2, 3, 4, 5]
         else:
-            known_labels = [1, 2, 3, 4, 5, 9, 14, 15]
+            known_labels = [1, 2, 3, 4, 5, 14, 15]
         unk_labels = [16]
     elif args.task_set == -1:
         known_labels = range(1, 9)
