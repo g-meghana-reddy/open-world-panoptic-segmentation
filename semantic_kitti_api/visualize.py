@@ -130,9 +130,6 @@ if __name__ == '__main__':
   print("ignore_safety", FLAGS.ignore_safety)
   print("offset", FLAGS.offset)
   print("*" * 80)
-  
-  if not os.path.exists(FLAGS.save_dir):
-    os.makedirs(FLAGS.save_dir)
 
   # open config file
   try:
@@ -194,18 +191,16 @@ if __name__ == '__main__':
     #Meghana
     if FLAGS.visu == 0:
     # 1. Known instances with distinct id colors
-        scan = SemLaserScan(nclasses, color_dict, project=True, unknown = False, known = True, distinct = True)
+        scan = SemLaserScan(nclasses, color_dict, project=True, unknown=False, known=True, task_set=FLAGS.task)
 
     if FLAGS.visu == 1:
     # 2. Unknown instances with distinct id colors
-        scan = SemLaserScan(nclasses, color_dict, project=True, unknown = True, known = False, distinct = True)
-    
+        scan = SemLaserScan(nclasses, color_dict, project=True, unknown=True, known=False, task_set=FLAGS.task)
+
     if FLAGS.visu == 2:
     # 3. Known and Unknown instances with continous id colors (Green and Red)
-        scan = SemLaserScan(nclasses, color_dict, project=True, unknown = True, known = True, distinct = False)
+        scan = SemLaserScan(nclasses, color_dict, project=True, unknown=True, known=True, task_set=FLAGS.task)
 
-    #Meghana
-    
   # create a visualizer
   semantics = not FLAGS.ignore_semantics
   instances = FLAGS.do_instances
@@ -233,16 +228,19 @@ if __name__ == '__main__':
     img_numpy = vis.canvas.render()
     img_file = '{}.png'.format(vis.offset)
     if FLAGS.predictions is None:
-      img_file = os.path.join(write_dir, 'gt', img_file)
+      output_dir =  os.path.join(write_dir, 'gt')
     else:
-      img_file = os.path.join(write_dir, '{}_pred_TS{}'.format(FLAGS.visu,FLAGS.task), img_file)
+      output_dir = os.path.join(write_dir, '{}_pred_TS{}'.format(FLAGS.visu,FLAGS.task))
+    if not os.path.exists(output_dir):
+      os.makedirs(output_dir)
+    img_file = os.path.join(output_dir, img_file)
     img = Image.fromarray(img_numpy)
 
-    legend = prepare_legend(img.size)
-    img = add_legend(img, legend)
+    # legend = prepare_legend(img.size)
+    # img = add_legend(img, legend)
 
     img.save(img_file)
     vis.offset += 1
     vis.update_scan()
-    
+
   vis.offset = 0

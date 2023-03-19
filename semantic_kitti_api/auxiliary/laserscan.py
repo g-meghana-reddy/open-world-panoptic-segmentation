@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
+import colorcet as cc
 import numpy as np
-import seaborn as sns
 import pdb
 
 
@@ -172,18 +172,16 @@ class SemLaserScan(LaserScan):
   """Class that contains LaserScan with x,y,z,r,sem_label,sem_color_label,inst_label,inst_color_label"""
   EXTENSIONS_LABEL = ['.label']
 
-  def __init__(self, nclasses, sem_color_dict=None, project=False, H=64, W=1024, fov_up=3.0, fov_down=-25.0, known = True, unknown = True, distinct = False):
+  def __init__(self, nclasses, sem_color_dict=None, project=False, H=64, W=1024, fov_up=3.0, fov_down=-25.0, known=True, unknown=True, dataset="semantic-kitti", task_set=-1):
     super(SemLaserScan, self).__init__(project, H, W, fov_up, fov_down)
     self.reset()
     self.nclasses = nclasses         # number of classes
-    
-    #Meghana
+    self.dataset = dataset
+    self.task_set = task_set
+
     self.unknown = unknown
     self.known = known
-    self.distinct = distinct
-    
-    #Meghana
-    
+
     # make semantic colors
     max_sem_key = 0
     for key, data in sem_color_dict.items():
@@ -193,62 +191,33 @@ class SemLaserScan(LaserScan):
     for key, value in sem_color_dict.items():
       self.sem_color_lut[key] = np.array(value, np.float32) / 255.0
 
-    # make instance colors
-    # max_inst_id = 100000
-    # self.inst_color_lut = np.random.uniform(low=0.0,
-                                            # high=1.0,
-                                            # size=(max_inst_id, 3))
-    # force zero to a gray-ish color
-    # self.inst_color_lut[0] = np.full((3), 0.1)
-
-    # ANI
-    # max_inst_id = 10
-    # kn_colors = np.random.uniform(low=0.0, high=1.0, size=(max_inst_id,))
-    # unk_colors = np.random.uniform(low=0.0, high=1.0, size=(max_inst_id,))
-    # zeros = np.zeros_like(kn_colors)
-    # self.inst_color_lut_known = np.concatenate([zeros, kn_colors, zeros], axis=-1) # green
-    # self.inst_color_lut_known = np.concatenate([unk_colors, zeros, zeros], axis=-1) # red
-    # https://seaborn.pydata.org/tutorial/color_palettes.html
-    self.max_inst_id = 7
-    self.inst_color_lut_unknown = np.array([
-      (248, 194, 145), (229, 80, 57), (235, 47, 6), (183, 21, 64), (246, 185, 59), (229, 142, 38), (248, 194, 145)
-    ], dtype=np.float32) # red
-    
-    self.inst_color_lut_unknown /= 255.
-    
-    self.inst_color_lut_known = np.array([
-      (18, 203, 196), (18, 137, 167), (6, 82, 221), (27, 20, 100), (153, 128, 250), (87, 88, 187), (217, 128, 250)
-    ], dtype=np.float32) # blue
-    self.inst_color_lut_known /= 255.
-    # self.inst_color_lut_known = np.array(sns.dark_palette("green", self.max_inst_id)) # green
-    # self.inst_color_lut_unknown = np.array(sns.dark_palette("red", self.max_inst_id)) # red
-    
-    #Meghana
-    self.things = [10, 11, 15, 18, 20, 30, 100]
-    
-    if not self.distinct:
-        self.max_inst_id = 20
-        # To add shades for known and unknown
-        self.inst_color_lut_known = np.array(sns.color_palette("flare", self.max_inst_id))
-        self.inst_color_lut_unknown = np.array(sns.color_palette("crest", self.max_inst_id))
-        
-    
+    if dataset == "semantic-kitti":
+      if self.task_set == -1:
+        self.things = [10, 11, 15, 18, 20, 30, 31, 32, 100]
+      elif self.task_set == 1:
+        self.things = [10, 18, 30, 100]
+      elif self.task_set == 2:
+        self.things = [10, 11, 15, 18, 20, 30, 100]
+      else:
+        assert False, "Task set not supported, choose among: -1, 1, 2"
+    elif dataset == "kitti-360":
+      if self.task_set == 1:
+        self.things = [26, 27, 24, 100]
+      elif self.task_set == 2:
+        self.things = [26, 33, 32, 27, 24, 17, 20, 100]
+      else:
+        assert False, "Task set not supported, choose among: 1, 2"
     else:
-        self.max_inst_id = 20
-        # To add different distinct colors for known instances and unknown instances
-        self.inst_color_lut_known = np.array(sns.color_palette("Paired", self.max_inst_id))
-        self.inst_color_lut_unknown = np.array(sns.color_palette("Paired", self.max_inst_id))
-        
-#         self.inst_color_lut_known = np.random.uniform(low=0.0,high=1.0, size=(max_inst_id, 3))
-#         self.inst_color_lut_unknown = np.random.uniform(low=0.0,high=1.0, size=(max_inst_id, 3))
-    
-    #Meghana
-    
-    
+      assert False, "Dataset not supported, choose among: semantic-kitti, kitti-360"
+
+    self.max_inst_id = 29
+    known_inds = np.random.choice(len(cc.glasbey_bw), self.max_inst_id)
+    self.inst_color_lut_known = np.array(cc.glasbey_bw)[known_inds]
+    unknown_inds = np.random.choice(len(cc.glasbey_bw), self.max_inst_id)
+    self.inst_color_lut_unknown = np.array(cc.glasbey_bw)[unknown_inds]
+
     self.inst_color_lut_known[:, [0,2]] = self.inst_color_lut_known[:, [2,0]] # rgb to bgr
     self.inst_color_lut_unknown[:, [0,2]] = self.inst_color_lut_unknown[:, [2,0]] # rgb to bgr
-
-    
 
   def reset(self):
     """ Reset scan members. """
@@ -322,29 +291,22 @@ class SemLaserScan(LaserScan):
     self.sem_label_color = self.sem_color_lut[self.sem_label]
     self.sem_label_color = self.sem_label_color.reshape((-1, 3))
 
-    # self.inst_label_color = self.inst_color_lut[self.inst_label]
-    # self.inst_label_color = self.inst_label_color.reshape((-1, 3))
-
-    # Ani
     self.inst_label_color = np.full((self.inst_label.shape[0], 3), 0.7)
     known_mask = np.logical_and(self.sem_label != 100, np.in1d(self.sem_label, self.things))
     unknown_mask = self.sem_label == 100
-    
-    #Meghana
-    unique_inst_labels = np.unique(self.inst_label)                                       
-    self.max_inst_id = 20 #len(self.things) * len(unique_inst_labels) 
-    
-    inv_instance = np.zeros((unique_inst_labels.max()+1), dtype = int)
+
+    unique_inst_labels = np.unique(self.inst_label)
+
+    inv_instance = np.zeros((unique_inst_labels.max()+1), dtype=int)
     for i, index in enumerate(unique_inst_labels):
         inv_instance[index] = i
-    
+
     if self.known:
-        self.inst_label_color[known_mask] = self.inst_color_lut_known[(inv_instance[self.inst_label[known_mask]] ) % 19]
-    
+        self.inst_label_color[known_mask] = self.inst_color_lut_known[(inv_instance[self.inst_label[known_mask]] ) % self.max_inst_id]
+
     if self.unknown:
-        self.inst_label_color[unknown_mask] = self.inst_color_lut_unknown[(inv_instance[self.inst_label[unknown_mask]]) % 19]
-    
-    #Meghana
+        self.inst_label_color[unknown_mask] = self.inst_color_lut_unknown[(inv_instance[self.inst_label[unknown_mask]]) % self.max_inst_id]
+
 
   def do_label_projection(self):
     # only map colors to labels that exist

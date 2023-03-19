@@ -34,7 +34,7 @@ class LaserScanVis:
     # safety critical, so let's do things wrong)
     self.action = "no"  # no, next, back, quit are the possibilities
 
-    # new canvas prepared for visualizing data 
+    # new canvas prepared for visualizing data
     # Ani - ADDED BGCOLOR
     if self.instances:
       size = (1200, 800)
@@ -163,11 +163,6 @@ class LaserScanVis:
                      (range_data.max() - range_data.min()) *
                      255).astype(np.uint8)
     viridis_map = self.get_mpl_colormap("viridis")
-    viridis_colors = viridis_map[viridis_range]
-    # self.scan_vis.set_data(self.scan.points,
-    #                        face_color=viridis_colors[..., ::-1],
-    #                        edge_color=viridis_colors[..., ::-1],
-    #                        size=1)
 
     # plot semantics
     if self.semantics:
@@ -175,17 +170,18 @@ class LaserScanVis:
                             face_color=self.scan.sem_label_color[..., ::-1],
                             # edge_color='black',
                             edge_color=self.scan.sem_label_color[..., ::-1],
-                            edge_width=1,
-                            size=3)
+                            edge_width=0.5,
+                            size=0.5)
+      self.sem_vis.antialias = 0
 
     # plot instances
     if self.instances:
       self.inst_vis.set_data(self.scan.points,
                              face_color=self.scan.inst_label_color[..., ::-1],
-                             # edge_color='black',
                              edge_color=self.scan.inst_label_color[..., ::-1],
-                             edge_width=1,
-                             size=3)
+                             edge_width=0.5,
+                             size=0.5)
+      self.inst_vis.antialias = 0
 
     # now do all the range image stuff
     # plot range image

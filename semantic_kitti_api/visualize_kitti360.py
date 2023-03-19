@@ -29,7 +29,7 @@ def add_legend(frame, legend):
 
 
 if __name__ == '__main__':
-  parser = argparse.ArgumentParser("./visualize.py")
+  parser = argparse.ArgumentParser("./visualize_kitti360.py")
   parser.add_argument(
       '--dataset', '-d',
       type=str,
@@ -47,13 +47,13 @@ if __name__ == '__main__':
       '--config', '-c',
       type=str,
       required=False,
-      default="config/semantic-kitti.yaml",
+      default="config/kitti-360.yaml",
       help='Dataset config file. Defaults to %(default)s',
   )
   parser.add_argument(
       '--sequence', '-s',
       type=str,
-      default="00",
+      default="03",
       required=False,
       help='Sequence to visualize. Defaults to %(default)s',
   )
@@ -114,7 +114,7 @@ if __name__ == '__main__':
       required=True,
       help='visualization 0: known, 1: unknown, 2: both',
   )
-    
+
   FLAGS, unparsed = parser.parse_known_args()
 
   # print summary of what we will do
@@ -130,9 +130,7 @@ if __name__ == '__main__':
   print("ignore_safety", FLAGS.ignore_safety)
   print("offset", FLAGS.offset)
   print("*" * 80)
-  
-  if not os.path.exists(FLAGS.save_dir):
-    os.makedirs(FLAGS.save_dir)
+
 
   # open config file
   try:
@@ -144,29 +142,31 @@ if __name__ == '__main__':
     quit()
 
   # fix sequence name
+  seq_id = int(FLAGS.sequence)
   FLAGS.sequence = '2013_05_28_drive_{0:04d}_sync'.format(int(FLAGS.sequence))
 
   # does sequence folder exist?
-  scan_paths = os.path.join(FLAGS.dataset, 'data_3d_raw', FLAGS.sequence, 'velodyne_points', 'data/')
-  gt_paths = os.path.join(FLAGS.dataset, 'data_3d_raw_labels', FLAGS.sequence, 'labels')
+  scan_paths = os.path.join(FLAGS.dataset, 'data_3d_raw', FLAGS.sequence, 'velodyne_points', 'data')
+  gt_paths = os.path.join(FLAGS.dataset, 'data_3d_raw', FLAGS.sequence, 'velodyne_points_labeled_10cm')
   if os.path.isdir(scan_paths):
     print("Sequence folder exists! Using sequence from %s" % scan_paths)
   else:
     print("Sequence folder doesn't exist! Exiting...")
     quit()
 
-  # populate the pointclouds
-  file_ids = set(vf[:-6] for vf in os.listdir(gt_paths) if vf.endswith('.label'))
-  scan_names = [os.path.join(dp, f) for dp, dn, fn in os.walk(
-      os.path.expanduser(scan_paths)) for f in fn if f[:-4] in file_ids]
-  scan_names.sort()
-
   # does sequence folder exist?
   if not FLAGS.ignore_semantics:
     if FLAGS.predictions is not None:
-      label_paths = os.path.join(FLAGS.predictions, FLAGS.sequence, 'predictions')
+      label_paths = os.path.join(FLAGS.predictions, "sequences", "{:02d}".format(seq_id), "predictions")
     else:
       label_paths = gt_paths
+
+    # populate the pointclouds
+    file_ids = set(int(vf[:-6]) for vf in os.listdir(label_paths) if vf.endswith('.label'))
+    file_ids_sorted = sorted(list(file_ids))
+    scan_names = [os.path.join(dp, f) for dp, dn, fn in os.walk(
+        os.path.expanduser(scan_paths)) for f in fn if int(f[:-4]) in file_ids]
+    scan_names.sort()
 
     if os.path.isdir(label_paths):
       print("Labels folder exists! Using labels from %s" % label_paths)
@@ -191,21 +191,18 @@ if __name__ == '__main__':
     color_dict = CFG["color_map"]
     nclasses = len(color_dict)
 
-    #Meghana
     if FLAGS.visu == 0:
     # 1. Known instances with distinct id colors
-        scan = SemLaserScan(nclasses, color_dict, project=True, unknown = False, known = True, distinct = True)
+        scan = SemLaserScan(nclasses, color_dict, project=True, unknown=False, known=True, dataset="kitti-360", task_set=FLAGS.task)
 
     if FLAGS.visu == 1:
     # 2. Unknown instances with distinct id colors
-        scan = SemLaserScan(nclasses, color_dict, project=True, unknown = True, known = False, distinct = True)
-    
+        scan = SemLaserScan(nclasses, color_dict, project=True, unknown=True, known=False, dataset="kitti-360", task_set=FLAGS.task)
+
     if FLAGS.visu == 2:
     # 3. Known and Unknown instances with continous id colors (Green and Red)
-        scan = SemLaserScan(nclasses, color_dict, project=True, unknown = True, known = True, distinct = False)
+        scan = SemLaserScan(nclasses, color_dict, project=True, unknown=True, known=True, dataset="kitti-360", task_set=FLAGS.task)
 
-    #Meghana
-    
   # create a visualizer
   semantics = not FLAGS.ignore_semantics
   instances = FLAGS.do_instances
@@ -231,18 +228,21 @@ if __name__ == '__main__':
 
   while vis.offset < vis.total:
     img_numpy = vis.canvas.render()
-    img_file = '{}.png'.format(vis.offset)
+    img_file = '{}.png'.format(file_ids_sorted[vis.offset])
     if FLAGS.predictions is None:
-      img_file = os.path.join(write_dir, 'gt', img_file)
+      output_dir = os.path.join(write_dir, 'gt')
     else:
-      img_file = os.path.join(write_dir, '{}_pred_TS{}'.format(FLAGS.visu,FLAGS.task), img_file)
+      output_dir = os.path.join(write_dir, '{}_pred_TS{}'.format(FLAGS.visu, FLAGS.task))
+    if not os.path.exists(output_dir):
+      os.makedirs(output_dir)
+    img_file = os.path.join(output_dir, img_file)
     img = Image.fromarray(img_numpy)
 
-    legend = prepare_legend(img.size)
-    img = add_legend(img, legend)
+    # legend = prepare_legend(img.size)
+    # img = add_legend(img, legend)
 
     img.save(img_file)
     vis.offset += 1
     vis.update_scan()
-    
+
   vis.offset = 0
