@@ -12,7 +12,7 @@
 #
 # ----------------------------------------------------------------------------------------------------------------------
 #
-#      Anirudh CHAKRAVARTHY, Meghana GANESINA - 04/04/2022
+#      Anirudh Chakravarthy and Meghana Ganesina - 04/04/2022
 #
 
 
@@ -39,7 +39,6 @@ from os.path import exists, join, isdir
 from datasets.common import *
 from torch.utils.data import Sampler, get_worker_info
 
-import pdb
 
 # ----------------------------------------------------------------------------------------------------------------------
 #
@@ -72,23 +71,8 @@ class Kitti360Dataset(PointCloudDataset):
             join(self.path, 'data_3d_raw_labels', 
                  '2013_05_28_drive_{:04d}_sync'.format(config.sequence), 'labels')):
             raise ValueError('Sequence does not have labels')
+        # we support a single sequence inference for Kitti360, training is not supported
         self.sequences = ['2013_05_28_drive_{:04d}_sync'.format(config.sequence)]
-#         if self.set == 'training':
-#             self.sequences = [
-#                 '2013_05_28_drive_{:04d}_sync'.format(i) 
-#                 for i in range(11) if i not in (1, 8) and
-#                 exists(join(self.path, 'data_3d_raw_labels', 
-#                             '2013_05_28_drive_{:04d}_sync'.format(i) , 'labels'))
-#             ]
-#         elif self.set == 'test':
-#             self.sequences = [
-#                 '2013_05_28_drive_{:04d}_sync'.format(i) 
-#                 for i in range(11) if i in (1, 8) and
-#                 exists(join(self.path, 'data_3d_raw_labels', 
-#                             '2013_05_28_drive_{:04d}_sync'.format(i) , 'labels'))
-#             ]
-#         else:
-#             raise ValueError('Unknown set for SemanticKitti data: ', self.set)
 
         # List all files in each sequence
         self.frames = []
@@ -106,7 +90,6 @@ class Kitti360Dataset(PointCloudDataset):
         self.seqential_batch = seqential_batch
         self.return_unknowns = return_unknowns
 
-        # TODO: create thing class mapping b/w semantic and kitti360
         self.task_set = config.task_set
         if self.task_set == 0:
             self.things = 3
@@ -655,7 +638,6 @@ class Kitti360Dataset(PointCloudDataset):
         # Concatenate batch
         ###################
         # centers = np.concatenate(c_list, axis=0) if not self.set  in ['validation', 'test'] else np.concatenate(val_center_label_list, axis=0)
-        # Ani:
         centers = np.concatenate(c_list, axis=0)
         times = np.concatenate(t_list, axis=0)
         stacked_points = np.concatenate(p_list, axis=0)
@@ -664,7 +646,6 @@ class Kitti360Dataset(PointCloudDataset):
         if self.return_unknowns:
             unk_labels = np.concatenate(u_list, axis=0)
         # ins_labels = np.concatenate(ins_l_list, axis=0) if not self.set in ['validation', 'test'] else np.concatenate(val_ins_labels_list, axis=0)
-        # Ani:
         ins_labels = np.concatenate(ins_l_list, axis=0)
         frame_inds = np.array(fi_list, dtype=np.int32)
         frame_centers = np.stack(p0_list, axis=0)
@@ -672,7 +653,6 @@ class Kitti360Dataset(PointCloudDataset):
         scales = np.array(s_list, dtype=np.float32)
         rots = np.stack(R_list, axis=0)
         
-        # Ani:
         if o_center_labels is not None:
             val_center_labels = np.concatenate(val_center_label_list, axis=0)
         else:
@@ -832,4 +812,3 @@ class Kitti360Dataset(PointCloudDataset):
                     pose = np.eye(4)
                 poses.append(pose)
         return poses
-        

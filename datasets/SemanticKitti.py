@@ -97,25 +97,27 @@ class SemanticKittiDataset(PointCloudDataset):
         ###########################
         # Object classes parameters
         ###########################
-        
-        # Ani: thing classes
+
         self.task_set = config.task_set
+        # NOTE: we set the thing classes for each task set here
+        # we assume that thing classes are continuous
         if self.task_set == 0:
             self.things = 3
         elif self.task_set == 1:
             self.things = 4
         elif self.task_set == 2:
             self.things = 6
-        else:
+        # support original SemKitti vocabulary
+        elif self.task_set == -1:
             self.things = 9
+        else:
+            raise ValueError("Task set: {} not supported".format(self.task_set))
 
         # Read labels
         #TODO: revert back
         if config.task_set == -1:
             config_file = join(self.path, 'semantic-kitti-orig.yaml')
-        elif config.n_frames == 1:
-            config_file = join(self.path, 'semantic-kitti.yaml')
-        elif config.n_frames > 1:
+        elif config.n_frames >= 1:
             config_file = join(self.path, 'semantic-kitti.yaml')
         else:
             raise ValueError('number of frames has to be >= 1')
@@ -144,6 +146,7 @@ class SemanticKittiDataset(PointCloudDataset):
             for k, v in learning_map_inv.items():
                 self.learning_map_inv[k] = v
 
+            # only task sets 1 and 2 have a held-out class (unknown)
             if self.task_set in (0, 1, 2):
                 self.unknown_label = max(learning_map.values())
 

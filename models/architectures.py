@@ -419,8 +419,10 @@ class KPFCNN(nn.Module):
             self.things = 4
         elif config.task_set == 2:
             self.things = 6
-        else:
+        elif config.task_set == -1:
             self.things = 9
+        else:
+            raise ValueError('No such task set: {}'.format(self.task_set))
 
         # Choose segmentation loss
         if len(config.class_w) > 0:
