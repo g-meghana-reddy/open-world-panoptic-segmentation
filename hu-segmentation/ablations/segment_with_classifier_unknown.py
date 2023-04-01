@@ -1,17 +1,20 @@
-# CUDA_VISIBLE_DEVICES=2 python segment_with_classifier_agnostic.py -t 1 -d kitti-360 -s 5 -o /project_data/ramanan/achakrav/4D-PLS/results/validation/val_preds_TS1_kitti360_updated_vocab -sd ../results/predictions/Kitti360/hlps_agnostic_regressor_TS1_updated_building
+# System imports
 import argparse
 import glob
 import os
 import sys
 import yaml
 
-sys.path.append("segment_classifier/")
+sys.path.append("../")
+sys.path.append("../segment_classifier/")
 
+# Third-party imports
 import numpy as np
 from sklearn.cluster import DBSCAN
 import torch
 from tqdm import tqdm
 
+# Relative imports
 from segment_classifier.model.pointnet2 import PointNet2Classification
 from tree_utils import flatten_indices, flatten_labels, flatten_scores
 from utils import *
@@ -166,7 +169,6 @@ def parse_args():
     parser.add_argument("-s", "--sequence", help="Sequence", type=int, default=8)
     parser.add_argument("-o", "--objsem_folder", help="Folder with object and semantic predictions", type=str, default="/project_data/ramanan/mganesin/4D-PLS/test/4DPLS_original_params_original_repo_nframes1_1e-3_softmax/val_probs")
     parser.add_argument("-sd", "--save_dir", help="Save directory", type=str, default='test/LOSP')
-    parser.add_argument("-n", "--network", help="Which network to use", choices=["regressor", "classifier"], default="regressor")
     parser.add_argument("--ckpt", help="Checkpoint to load for segment classifier", type=str, default=None)
     parser.add_argument("--use-sem-features", help="Whether to use semantic features in classifier", action="store_true")
     parser.add_argument("--use-sem-refinement", help="Whether to use semantic refinement head", action="store_true")
@@ -178,44 +180,33 @@ if __name__ == '__main__':
     args = parse_args()
 
     if args.task_set == 0:
-        known_labels = [1, 2]
+        # unk_labels = [1, 2]
         unk_labels = [7]
     elif args.task_set == 1:
-        if args.dataset == "semantic-kitti":
-            known_labels = [1, 2, 3]
-        else:
-            known_labels = [1, 2, 3, 6]
+        # unk_labels = [1, 2, 3]
         unk_labels = [10]
     elif args.task_set == 2:
-        if args.dataset == "semantic-kitti":
-            known_labels = [1, 2, 3, 4, 5]
-        else:
-            known_labels = [1, 2, 3, 4, 5, 9, 14, 15]
+        # unk_labels = [1, 2, 3, 4, 5]
         unk_labels = [16]
     elif args.task_set == -1:
-        known_labels = range(1, 9)
-        unk_labels = [1]
+        unk_labels = range(1, 9)
     else:
         raise ValueError('Unknown task set: {}'.format(args.task_set))
 
     if args.use_sem_refinement:
         in_channels = 256 # 0
-        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats_sem_refinement_weighted/checkpoints/epoch_200.pth"
-        # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/sem_feats_only_focal_sem_refinement_weighted_project_input_1024/checkpoints/epoch_200.pth"
-        # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats_sem_reifnement_weighted_new_indices/checkpoints/epoch_200.pth"
-        # args.ckpt = "/project_data/ramanan/mganesin/4D-PLS/results/checkpoints/xyz_sem_mean_refine/checkpoints/epoch_200.pth"
+        # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats_sem_refinement_weighted/checkpoints/epoch_200.pth"
     elif args.use_sem_features:
         in_channels = 256
-        # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/sem_xyz/checkpoints/epoch_200.pth"
-        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats/checkpoints/epoch_50.pth"
+        # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats/checkpoints/epoch_50.pth"
     else:
         in_channels = 0
-        if args.task_set == -1:
-            args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_regression_MSE_LOSS_200_double_mlp_full_dataset/checkpoints/epoch_200.pth"
-        elif args.task_set == 1:
-            args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_{}_TS1/checkpoints/epoch_200.pth".format(args.network)
-        else:
-            args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_{}_TS2/checkpoints/epoch_200.pth".format(args.network)
+        # if args.task_set == -1:
+        #     args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_regression_MSE_LOSS_200_double_mlp_full_dataset/checkpoints/epoch_200.pth"
+        # elif args.task_set == 1:
+        #     args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_regressor_TS1/checkpoints/epoch_200.pth"
+        # else:
+        #     args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_regressor_TS2/checkpoints/epoch_200.pth"
 
     # instantiate the segment classifier
     cfg = Config()
@@ -356,14 +347,10 @@ if __name__ == '__main__':
         else:
             semantic_features = None
 
-
-        # if len(unk_labels) == 1:
-        #     mask = np.where(labels == unk_labels[0])
-        # else:
-        #     mask = np.where(np.logical_and(labels > 0, labels < np.max(unk_labels)))
-        mask = np.logical_and(labels > 0, labels == unk_labels[0])
-        for known_label in known_labels:
-            mask = np.logical_or(mask, labels == known_label)
+        if len(unk_labels) == 1:
+            mask = np.where(labels == unk_labels[0])
+        else:
+            mask = np.where(np.logical_and(labels > 0, labels < np.max(unk_labels)))
 
         pts_velo_cs_objects = pts_velo_cs[mask]
         objectness_objects = objectness[mask]  # todo: change objectness_objects into a local variable

@@ -1,18 +1,19 @@
+# System imports
 import argparse
-from sklearn.cluster import DBSCAN
-import numpy as np
-import pickle
-import pdb
-import time
-import os
-from tree_utils import flatten_indices, flatten_scores, Segment, TreeSegment
 import sys
-from utils import *
-# import open3d as o3d
-import glob
+import os
 import yaml
 
-import pdb
+sys.path.append("../")
+
+# Third-party imports
+import glob
+import numpy as np
+from sklearn.cluster import DBSCAN
+
+# Relative imports
+from tree_utils import flatten_scores, flatten_indices
+from utils import *
 
 
 def evaluate(inds):
@@ -329,12 +330,6 @@ if __name__ == '__main__':
             #     instances[indices] = 0
             # else:
             instances[indices] = new_instance + id
-            # majority semantic label in the segment is the new assignment
-            labels[indices] = np.bincount(sem_gt[indices]).argmax()
-
-            # softmax based label transfer
-            # things_softmax = softmax_scores[indices][:, :8]
-            # labels[indices] = np.mean(things_softmax, axis = 0).argmax() + 1
         
         
         # Create .label files using the updated instance and semantic labels
@@ -344,3 +339,4 @@ if __name__ == '__main__':
         new_preds = np.bitwise_or(instances, inv_sem_labels)
         new_preds.tofile('{}/sequences/{:02d}/predictions/{:07d}.label'.format(
                 args.save_dir, args.sequence, idx))
+        

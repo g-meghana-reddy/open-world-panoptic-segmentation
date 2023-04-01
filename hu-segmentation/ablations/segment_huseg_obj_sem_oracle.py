@@ -1,50 +1,84 @@
+# System imports
 import argparse
-from sklearn.cluster import DBSCAN
-import numpy as np
-import pickle
-import pdb
-import time
-import os
-from tree_utils import flatten_scores, flatten_indices
 import sys
-from utils import *
-# import open3d as o3d
-import glob
+import os
 import yaml
 
-import pdb
+sys.path.append("../")
+
+# Third-party imports
+import glob
+import numpy as np
+from sklearn.cluster import DBSCAN
+
+# Relative imports
+from tree_utils import flatten_scores, flatten_indices
+from utils import *
 
 
 def evaluate(inds):
     return np.mean(objectness_objects[inds]).item()
+
+def evaluate_iou_based_objectness(pred_inds):
+    # predictions
+    pred_counts = pred_inds.shape[0]
+    pred_indices = pts_indexes_objects[pred_inds]
+
+    # groundtruth
+    gt_indices_local = np.arange(gt_instance_indexes.shape[0])
+    gt_inst_ids = gt_instance_ids[gt_indices_local]
+
+    unique_gt_ids, unique_gt_counts = np.unique(gt_inst_ids, return_counts = True)
+    
+    ious = []
+    for idx, gt_ins in enumerate(unique_gt_ids):
+        gt_ind = np.where(gt_inst_ids == gt_ins)
+        intersections = len(set(pred_indices) & set(gt_instance_indexes[gt_ind]))
+        gt_counts = unique_gt_counts[idx]
+        union = gt_counts + pred_counts - intersections
+        iou = intersections / union
+        ious.append(iou)
+
+    ious = np.array(ious)
+    max_iou = np.max(ious)
+    
+    return max_iou
     
     
 def segment(id_, eps_list, cloud, original_indices=None, aggr_func='min'):
     if not all(eps_list[i] > eps_list[i+1] for i in range(len(eps_list)-1)):
         raise ValueError('eps_list is not sorted in descending order')
-    # pick the first threshold from the list
+    
+    # Pick the first threshold from the list
     max_eps = eps_list[0]
-    #
+    
+    # Generate the indices if it does not exist
     if original_indices is None: original_indices = np.arange(cloud.shape[0])
     if isinstance(original_indices, list): original_indices = np.array(original_indices)
-    # spatial segmentation
+    
+    # Spatial Segmentation: run DBSCAN to get clusters
     dbscan = DBSCAN(max_eps, min_samples=1).fit(cloud[original_indices,:])
     labels = dbscan.labels_
-    # evaluate every segment
+
+    # Evaluate every segment from the list of clusters
     indices, scores = [], []
     for unique_label in np.unique(labels):
         inds = original_indices[np.flatnonzero(labels == unique_label)]
         indices.append(inds.tolist())
-        scores.append(evaluate(inds))
-    # return if we are done
+        scores.append(evaluate_iou_based_objectness(inds))
+
+    # Return if we are done
     if len(eps_list) == 1: return indices, scores
-    # expand recursively
+
+    # Compute the hierarchical tree
     final_indices, final_scores = [], []
     for i, (inds, score) in enumerate(zip(indices, scores)):
         # focus on this segment
         fine_indices, fine_scores = segment(id_, eps_list[1:], cloud, inds)
+
         # flatten scores to get the minimum (keep structure)
         flat_fine_scores = flatten_scores(fine_scores)
+
         if aggr_func == 'min':
             aggr_score = np.min(flat_fine_scores)
         elif aggr_func == 'avg':
@@ -69,39 +103,62 @@ def segment(id_, eps_list, cloud, original_indices=None, aggr_func='min'):
                 sum_score += np.sum(squared_dists * score)
             aggr_score = float(sum_score)/sum_count
 
-        # COMMENTING THIS OUT BECAUSE OF ADDING SUM AS AN AGGR FUNC
-        # assert(aggr_score <= 1 and aggr_score >= 0)
-
-        # if splitting is better
+        # If splitting is better the the aggr_score should be better than the current score
         if score < aggr_score:
             final_indices.append(fine_indices)
             final_scores.append(fine_scores)
         else: # otherwise
             final_indices.append(inds)
             final_scores.append(score)
+
     return final_indices, final_scores
 
 
-def vis_instance_o3d():
-    # visualization
-    pcd_objects = o3d.geometry.PointCloud()
-    colors = np.zeros((len(pts_velo_cs_objects), 4))
-    max_instance = len(flat_indices)
-    print(f"point cloud has {max_instance + 1} clusters")
-    colors_instance = plt.get_cmap("tab20")(np.arange(len(flat_indices)) / (max_instance if max_instance > 0 else 1))
 
-    for idx in range(len(flat_indices)):
-        colors[flat_indices[idx]] = colors_instance[idx]
+def compute_hierarchical_tree(eps_list, points_3d, original_indices= None):
+    '''We compute segments from hierarchical tree and compute 
+        the objectness scores to perform tree cut.'''
+    
+    # If we are at the end of the hierarchical tree then return the empty node.
+    if len(eps_list) == 0: return []
 
-    pcd_objects.points = o3d.utility.Vector3dVector(pts_velo_cs_objects[:, :3])
-    pcd_objects.colors = o3d.utility.Vector3dVector(colors[:, :3])
+    # Pick the first threshold from the eps_list.
+    max_eps = eps_list[0]
 
-    pcd_background = o3d.geometry.PointCloud()
-    pcd_background.points = o3d.utility.Vector3dVector(pts_velo_cs[background_mask, :3])
-    pcd_background.paint_uniform_color([0.5, 0.5, 0.5])
+    # Compute the original indices for each point at level 0.
+    # Reassign the original_indices in further levels to keep a track of them.
+    if isinstance(original_indices, list): original_indices = np.array(original_indices)
 
-    o3d.visualization.draw_geometries([pcd_objects, pcd_background])
+    # Perform DBSCAN on the current set of 3D points to get segments at the current level L.
+    dbscan = DBSCAN(max_eps, min_samples=1).fit(points_3d[original_indices,:])
+    labels = dbscan.labels_
 
+    # Compute the indices and score per segment and store them as part of the tree node.
+    segments = []
+    for unique_label in np.unique(labels):
+
+        inds = original_indices[np.flatnonzero(labels == unique_label)]
+        score = evaluate_iou_based_objectness(inds)
+        segment = TreeSegment(inds, score)
+        segment.child_segments = compute_hierarchical_tree(eps_list[1:], points_3d, inds)
+        segments.append(segment)
+
+    return segments
+
+
+def segment_tree_traverse(segment_tree, level):
+    if len(segment_tree.curr_segment_data.indices) == 0:
+        return
+
+    for segment in segment_tree.child_segments:  
+        segment_tree_traverse(segment, level+1)
+
+    print("----------------------------------------------")
+    print("Level: {}".format(level))
+    print("Segment indices: ", segment_tree.curr_segment_data.indices)
+    print("Segment score: ", segment_tree.curr_segment_data.score)
+    print("----------------------------------------------")
+    
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -222,20 +279,26 @@ if __name__ == '__main__':
         instances = np.load(instance_file)
         parent_dir, ins_base = os.path.split(instance_file)
 
-        mask = np.where(np.logical_and(labels > 0 , labels < 9))
+        #for unk_label in unk_labels:
+        #     mask = labels == unk_label
+        # background_mask = labels != unk_label
+        pred_mask = np.where(np.logical_and(labels > 0 , labels < 9))
+        gt_mask = np.where(np.logical_and(sem_gt > 0 , sem_gt < 9))
 
-        pts_velo_cs_objects = pts_velo_cs[mask]
-        objectness_objects = objectness[mask]  # todo: change objectness_objects into a local variable
-        pts_indexes_objects = pts_indexes[mask]
+        pts_velo_cs_objects = pts_velo_cs[pred_mask]
+        objectness_objects = objectness[pred_mask]  # todo: change objectness_objects into a local variable
+        pts_indexes_objects = pts_indexes[pred_mask]
+
+        gt_instance_ids = ins_gt[gt_mask]
+        gt_instance_indexes = np.arange(ins_gt.shape[0])[gt_mask]
 
         assert (len(pts_velo_cs_objects) == len(objectness_objects))
 
         if len(pts_velo_cs_objects) < 1:
-            # np.save(segmented_file, instances)
             continue
 
         # mask out 4dpls instance predictions
-        instances[mask] = 0
+        instances[pred_mask] = 0
 
         # segmentation with point-net
         id_ = 0
@@ -243,14 +306,22 @@ if __name__ == '__main__':
         eps_list_tum = [1.2488, 0.8136, 0.6952, 0.594, 0.4353, 0.3221]
         indices, scores = segment(id_, eps_list_tum, pts_velo_cs_objects[:, :3])
 
+        # Use this to create the dataset for our objectness classifier
+        # ========================================== #
+        # original_indices = np.arange(pts_velo_cs_objects.shape[0])
+        # segment_tree = TreeSegment(original_indices, 0)
+        # segment_tree.child_segments = compute_hierarchical_tree(eps_list_tum, pts_velo_cs_objects, original_indices)
+        # segment_tree_traverse(segment_tree, level = 0)
+        # ========================================== #
+
         # flatten list(list(...(indices))) into list(indices)
         flat_indices = flatten_indices(indices)
+        
         # map from object_indexes to pts_indexes
         mapped_indices = []
         for indexes in flat_indices:
             mapped_indices.append(pts_indexes_objects[indexes].tolist())
 
-        # mapped_flat_indices = pts_indexes_objects
         flat_scores = flatten_scores(scores)
 
         new_instance = instances.max() + 1
@@ -259,88 +330,14 @@ if __name__ == '__main__':
             #     instances[indices] = 0
             # else:
             instances[indices] = new_instance + id
+            # majority semantic label in the segment is the new assignment
+            labels[indices] = np.bincount(sem_gt[indices]).argmax()
+
+            # softmax based label transfer
+            # things_softmax = softmax_scores[indices][:, :8]
+            # labels[indices] = np.mean(things_softmax, axis = 0).argmax() + 1
         
-        # ========================================================
-        # update the semantic predictions using match with GTs
-        # copied from eval_np
-
-        # Set up variables for coherence
-        mask_extended = np.logical_and(labels > 0 , labels < 9)
-        gt_mask = np.logical_and(sem_gt > 0 , sem_gt < 9)
-        instance_pred_obj = instances * mask_extended.astype(np.int64)
-        sem_gt_objects = sem_gt * gt_mask.astype(np.int64)
-        ins_gt_objects = ins_gt * gt_mask.astype(np.int64)
-        sem_pred_objects = labels * mask_extended.astype(np.int64)
-        softmax_scores_pred = softmax_scores * mask_extended.astype(np.int64)[:, None]
-
-        # generate the areas for each unique instance prediction
-        offset = 2 ** 32
-        unique_pred, counts_pred = np.unique(instance_pred_obj[instance_pred_obj > 0], return_counts=True)
-        id2idx_pred = {id: idx1 for idx1, id in enumerate(unique_pred)}
-        matched_pred = np.array([False] * unique_pred.shape[0])
-        # print("Unique predictions:", unique_pred)
-
-        # generate the areas for each unique instance gt_np
-        unique_gt, counts_gt = np.unique(ins_gt_objects[ins_gt_objects > 0], return_counts=True)
-        id2idx_gt = {id: idx1 for idx1, id in enumerate(unique_gt)}
-        matched_gt = np.array([False] * unique_gt.shape[0])
-        # print("Unique ground truth:", unique_gt)
-
-        # generate intersection using offset
-        valid_combos = np.logical_and(instance_pred_obj > 0, ins_gt_objects > 0)
-        offset_combo = instance_pred_obj[valid_combos] + offset * ins_gt_objects[valid_combos]
-        unique_combo, counts_combo = np.unique(offset_combo, return_counts=True)
-
-        # generate an intersection map
-        # count the intersections with over 0.5 IoU as TP
-        gt_labels = unique_combo // offset
-        pred_labels = unique_combo % offset
-        gt_areas = np.array([counts_gt[id2idx_gt[id]] for id in gt_labels])
-        pred_areas = np.array([counts_pred[id2idx_pred[id]] for id in pred_labels])
-        intersections = counts_combo
-        unions = gt_areas + pred_areas - intersections
-        ious = intersections.astype(np.float64) / unions.astype(np.float64)
-
-        tp_indexes = ious > 0.5
-        matched_gt[[id2idx_gt[id] for id in gt_labels[tp_indexes]]] = True
-        matched_pred[[id2idx_pred[id] for id in pred_labels[tp_indexes]]] = True
-
-        matched_pred_idxs = [id2idx_pred[id] for id in pred_labels[tp_indexes]]
-        matched_gt_idxs = [id2idx_gt[id] for id in gt_labels[tp_indexes]]
-        unmatched_pred_idxs = [
-            idx for idx in range(unique_pred.shape[0])
-            if idx not in matched_pred_idxs
-        ]
-        for unmatched_pred_idx in unmatched_pred_idxs:
-            # Reject the segments which have lower IoU overlap 
-            # with GT instance labels
-            unmatched_ins = unique_pred[unmatched_pred_idx]
-            unmatched_mask = instance_pred_obj == unmatched_ins
-
-            # Ignore the rejected segments
-            instances[unmatched_mask] = 9999
-
-        for (matched_pred_idx, matched_gt_idx) in zip(matched_pred_idxs, matched_gt_idxs):
-            # find semantic label for transfer
-            gt_ins = unique_gt[matched_gt_idx]
-            sem_label_gt = sem_gt_objects[ins_gt_objects == gt_ins]
-            sem_label = np.bincount(sem_label_gt).argmax()
-
-            pred_ins = unique_pred[matched_pred_idx]
-            # sem_label_pred = sem_pred_objects[instance_pred_obj == pred_ins]
-
-            # # softmax mean
-            # sem_label_probs = softmax_scores_pred[instance_pred_obj == pred_ins][:, :8]
-            # sem_label = np.mean(sem_label_probs, axis = 0) * np.bincount(sem_label_pred, minlength=9)[1:]
-            # sem_label = sem_label.argmax() + 1
-            
-            # # majority count
-            # # sem_label_major = np.bincount(sem_label_pred).argmax()
-            
-            # transfer the label
-            labels[instances == pred_ins] = sem_label
-        # ========================================================
-
+        
         # Create .label files using the updated instance and semantic labels
         sem_labels = labels.astype(np.int32)
         inv_sem_labels = inv_learning_map[sem_labels]
@@ -348,4 +345,3 @@ if __name__ == '__main__':
         new_preds = np.bitwise_or(instances, inv_sem_labels)
         new_preds.tofile('{}/sequences/{:02d}/predictions/{:07d}.label'.format(
                 args.save_dir, args.sequence, idx))
-        

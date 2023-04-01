@@ -1,18 +1,19 @@
+# System imports
 import argparse
-from sklearn.cluster import DBSCAN
-import numpy as np
-import pickle
-import pdb
-import time
-import os
-from tree_utils import flatten_scores, flatten_indices
 import sys
-from utils import *
-# import open3d as o3d
-import glob
+import os
 import yaml
 
-import pdb
+sys.path.append("../")
+
+# Third-party imports
+import glob
+import numpy as np
+from sklearn.cluster import DBSCAN
+
+# Relative imports
+from tree_utils import flatten_scores, flatten_indices
+from utils import *
 
 
 def evaluate(inds):
