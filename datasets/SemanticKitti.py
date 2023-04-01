@@ -673,7 +673,6 @@ class SemanticKittiDataset(PointCloudDataset):
         ###################
         #print (c_list.shape)
         # centers = np.concatenate(c_list, axis=0) if not self.set  in ['validation', 'test'] else np.concatenate(val_center_label_list, axis=0)
-        # Ani:
         centers = np.concatenate(c_list, axis=0)
         times = np.concatenate(t_list, axis=0)
         stacked_points = np.concatenate(p_list, axis=0)
@@ -682,7 +681,6 @@ class SemanticKittiDataset(PointCloudDataset):
         if self.return_unknowns:
             unk_labels = np.concatenate(u_list, axis=0)
         # ins_labels = np.concatenate(ins_l_list, axis=0) if not self.set in ['validation', 'test'] else np.concatenate(val_ins_labels_list, axis=0)
-        # Ani:
         ins_labels = np.concatenate(ins_l_list, axis=0)
         frame_inds = np.array(fi_list, dtype=np.int32)
         frame_centers = np.stack(p0_list, axis=0)
@@ -690,7 +688,6 @@ class SemanticKittiDataset(PointCloudDataset):
         scales = np.array(s_list, dtype=np.float32)
         rots = np.stack(R_list, axis=0)
         
-        # Ani:
         if o_center_labels is not None:
             val_center_labels = np.concatenate(val_center_label_list, axis=0)
         else:

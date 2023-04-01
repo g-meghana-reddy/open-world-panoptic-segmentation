@@ -188,7 +188,6 @@ if __name__ == '__main__':
     color_dict = CFG["color_map"]
     nclasses = len(color_dict)
 
-    #Meghana
     if FLAGS.visu == 0:
     # 1. Known instances with distinct id colors
         scan = SemLaserScan(nclasses, color_dict, project=True, unknown=False, known=True, task_set=FLAGS.task)

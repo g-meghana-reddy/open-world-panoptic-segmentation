@@ -55,8 +55,6 @@ def write_pred(prediction_path, save_path, sequence, scene, inv_learning_map):
 
     ins_preds = ins_preds.astype(np.int32)
     for idx, semins in enumerate(np.unique(sem_preds)):
-        #Meghs
-
         #if semins < 1 or semins > 8:
         if semins in sem:
             valid_ind = np.argwhere((sem_preds == semins) & (ins_preds == 0))[:, 0]

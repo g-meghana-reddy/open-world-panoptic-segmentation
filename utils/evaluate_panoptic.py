@@ -226,7 +226,6 @@ if __name__ == '__main__':
   class_PQ, class_SQ, class_RQ, class_all_PQ, class_all_SQ, class_all_RQ, class_all_UQ = class_evaluator.getPQ()
   class_IoU, class_all_IoU = class_evaluator.getSemIoU()
 
-  # Ani:
   class_all_Prec = class_evaluator.pan_tp.astype(np.double) / np.maximum(
       class_evaluator.pan_tp.astype(np.double) + 
       class_evaluator.pan_fp.astype(np.double), class_evaluator.eps)
@@ -246,7 +245,6 @@ if __name__ == '__main__':
   class_all_RQ = class_all_RQ.flatten().tolist()
   class_all_UQ = class_all_UQ.flatten().tolist()
   class_IoU = class_IoU.item()
-  # Ani
   class_all_IoU = class_all_IoU.flatten().tolist()
   class_all_Prec = class_all_Prec.flatten().tolist()
   class_all_Recall = class_all_Recall.flatten().tolist()
@@ -300,7 +298,6 @@ if __name__ == '__main__':
     output_dict[class_str]["SQ"] = sq
     output_dict[class_str]["RQ"] = rq
     output_dict[class_str]["IoU"] = iou
-    # Ani
     output_dict[class_str]["UQ"] = uq
     output_dict[class_str]["Prec"] = class_all_Prec[idx]
     output_dict[class_str]["Recall"] = class_all_Recall[idx]
@@ -326,7 +323,7 @@ if __name__ == '__main__':
   SQ_stuff = np.mean([float(output_dict[c]["SQ"]) for c in stuff])
   mIoU = output_dict["all"]["IoU"]
   known_IoU = np.mean([float(output_dict[c]["IoU"]) for c in all_classes if c != 'unknown'])
-  # Ani
+
   if FLAGS.task_set in (0, 1, 2):
     PQ_known_things = np.mean([float(output_dict[c]["PQ"]) for c in things if c != 'unknown'])
     PQ_known_stuff = np.mean([float(output_dict[c]["PQ"]) for c in stuff])
@@ -358,7 +355,7 @@ if __name__ == '__main__':
   codalab_output["rq_things"] = float(RQ_things)
   codalab_output["sq_things"] = float(SQ_things)
   codalab_output["known_IoU"] = float(known_IoU)
-  # Ani
+
   if FLAGS.task_set in (0, 1, 2):
     codalab_output["pq_known_things_mean"] = float(PQ_known_things)
     codalab_output["pq_known_stuff_mean"] = float(PQ_known_stuff)
@@ -384,7 +381,6 @@ if __name__ == '__main__':
     table = []
     for cl in all_classes:
       entry = output_dict[cl]
-      # Ani
       table.append({
           "class": cl,
           "pq": "{:.3}".format(entry["PQ"]),

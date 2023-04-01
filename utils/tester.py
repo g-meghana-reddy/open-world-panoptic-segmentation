@@ -479,7 +479,6 @@ class ModelTester:
                 r_mask_list = batch.reproj_masks
                 labels_list = batch.val_labels
                 
-                # Ani
                 centers_output = centers_output.cpu().detach().numpy()
                 embedding = embedding.cpu().detach().numpy()
                 
@@ -502,7 +501,6 @@ class ModelTester:
                     s_ind = f_inds[b_i, 0]
                     f_ind = f_inds[b_i, 1]
 
-                    # Ani:
                     center_props = centers_output[i0:i0 + length]
                     emb = embedding[i0:i0 + length]
 
@@ -510,7 +508,6 @@ class ModelTester:
                     proj_probs = probs[proj_inds]
                     proj_ins_probs = ins_probs[proj_inds]
 
-                    # Ani
                     proj_center_probs = center_props[proj_inds]
                     proj_emb = emb[proj_inds]
 
@@ -519,7 +516,6 @@ class ModelTester:
                         proj_probs = np.expand_dims(proj_probs, 0)
                         proj_ins_probs = np.expand_dims(proj_ins_probs, 0)
 
-                        # Ani:
                         proj_center_probs = np.expand_dims(proj_center_probs, 0)
                         proj_emb = np.expand_dims(proj_emb, 0)
 
@@ -539,7 +535,6 @@ class ModelTester:
                     filepath_s = join(test_path, folder, filename_s)
                     filename_i = '{:s}_{:s}_i.npy'.format(seq_name, frame_name)
                     filepath_i = join(test_path, folder, filename_i)
-                    # Ani:
                     filename_c = '{:s}_{:s}_c.npy'.format(seq_name, frame_name)
                     filepath_c = join(test_path, folder, filename_c)
                     filename_e = '{:s}_{:s}_e.npy'.format(seq_name, frame_name)
@@ -553,7 +548,6 @@ class ModelTester:
                     frame_probs_softmax = np.zeros((proj_mask.shape[0], nc_model))
                     ins_preds = np.zeros((proj_mask.shape[0]))
 
-                    # Ani:
                     center_preds = np.zeros((proj_mask.shape[0]))
                     emb_preds = np.zeros((proj_mask.shape[0], config.first_features_dim), dtype=np.float32)
 
@@ -563,14 +557,12 @@ class ModelTester:
                     frame_probs_softmax[proj_mask, :] = proj_probs
                     ins_preds[proj_mask] = proj_ins_probs
 
-                    # Ani:
                     center_preds[proj_mask] = proj_center_probs[:, 0]
                     emb_preds[proj_mask] = proj_emb
 
                     #np.save(filepath, frame_probs_uint8)
                     np.save(filepath_i, ins_preds)
 
-                    # Ani:
                     np.save(filepath_c, center_preds)
                     np.save(filepath_e, emb_preds)
 

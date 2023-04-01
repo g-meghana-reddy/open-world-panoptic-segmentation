@@ -136,7 +136,6 @@ def main(FLAGS):
             for ins_id in np.unique(unknown_inst):
                 
                 ind = np.where(unknown_inst == ins_id)[0]
-                #Meghs
                 
                 # If we have N = 25 points or less then just drop those instances.
                 if unknown_points[ind].shape[0] < 50:

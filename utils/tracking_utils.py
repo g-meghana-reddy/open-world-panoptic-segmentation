@@ -3,8 +3,6 @@ import torch
 
 
 def remove_outliers(points):
-    #Meghs m ,_ = torch.median(points, 0)
-    
     median = torch.stack(get_median_center_from_points(points))
     dist = ((points - median) ** 2).sum(1)
     valid_indices = torch.where(dist < torch.mean(dist)*2)

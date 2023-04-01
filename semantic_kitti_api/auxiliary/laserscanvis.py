@@ -35,13 +35,10 @@ class LaserScanVis:
     self.action = "no"  # no, next, back, quit are the possibilities
 
     # new canvas prepared for visualizing data
-    # Ani - ADDED BGCOLOR
     if self.instances:
       size = (1200, 800)
-#       size = (600, 400)
     else:
       size = (600, 800)
-#       size = (300, 400)
 
     self.canvas = SceneCanvas(
         keys='interactive', size=size, show=True, px_scale=4, bgcolor='white')
@@ -67,7 +64,6 @@ class LaserScanVis:
       # self.grid.add_widget(self.sem_view, 0, 1)
       self.grid.add_widget(self.sem_view, 0, 0)
       self.sem_vis = visuals.Markers()
-      # Ani
       self.sem_view.camera = vispy.scene.cameras.turntable.TurntableCamera(scale_factor=15)# vispy.scene.cameras.turntable.TurntableCamera(elevation=90, center=(0,0,10), azimuth=90, scale_factor=2)
       self.sem_view.add(self.sem_vis)
       # visuals.XYZAxis(parent=self.sem_view.scene)
@@ -77,7 +73,6 @@ class LaserScanVis:
       print("Using instances in visualizer")
       self.inst_view = vispy.scene.widgets.ViewBox(
           border_color='black', parent=self.canvas.scene)
-      # Ani
       # self.grid.add_widget(self.inst_view, 0, 2)
       self.grid.add_widget(self.inst_view, 0, 1)
       self.inst_vis = visuals.Markers()
