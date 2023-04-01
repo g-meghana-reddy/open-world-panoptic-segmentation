@@ -49,13 +49,6 @@ class LaserScanVis:
     self.grid = self.canvas.central_widget.add_grid()
 
     # laserscan part
-    # self.scan_view = vispy.scene.widgets.ViewBox(
-    #     border_color='white', parent=self.canvas.scene)
-    # self.grid.add_widget(self.scan_view, 0, 0)
-    # self.scan_vis = visuals.Markers()
-    # self.scan_view.camera = 'turntable'
-    # self.scan_view.add(self.scan_vis)
-    # visuals.XYZAxis(parent=self.scan_view.scene)
     # add semantics
     if self.semantics:
       print("Using semantics in visualizer")
@@ -64,7 +57,7 @@ class LaserScanVis:
       # self.grid.add_widget(self.sem_view, 0, 1)
       self.grid.add_widget(self.sem_view, 0, 0)
       self.sem_vis = visuals.Markers()
-      self.sem_view.camera = vispy.scene.cameras.turntable.TurntableCamera(scale_factor=15)# vispy.scene.cameras.turntable.TurntableCamera(elevation=90, center=(0,0,10), azimuth=90, scale_factor=2)
+      self.sem_view.camera = vispy.scene.cameras.turntable.TurntableCamera(scale_factor=15)
       self.sem_view.add(self.sem_vis)
       # visuals.XYZAxis(parent=self.sem_view.scene)
       # self.sem_view.camera.link(self.scan_view.camera)
@@ -78,8 +71,6 @@ class LaserScanVis:
       self.inst_vis = visuals.Markers()
       self.inst_view.camera = vispy.scene.cameras.turntable.TurntableCamera(scale_factor=15)
       self.inst_view.add(self.inst_vis)
-      # visuals.XYZAxis(parent=self.inst_view.scene)
-      # self.inst_view.camera.link(self.scan_view.camera)
 
     # img canvas size
     self.multiplier = 1

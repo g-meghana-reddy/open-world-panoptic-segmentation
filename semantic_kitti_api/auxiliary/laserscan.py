@@ -199,16 +199,16 @@ class SemLaserScan(LaserScan):
       elif self.task_set == 2:
         self.things = [10, 11, 15, 18, 20, 30, 100]
       else:
-        assert False, "Task set not supported, choose among: -1, 1, 2"
+        raise ValueError("Task set not supported, choose among: -1, 1, 2")
     elif dataset == "kitti-360":
       if self.task_set == 1:
         self.things = [26, 27, 24, 100]
       elif self.task_set == 2:
         self.things = [26, 33, 32, 27, 24, 17, 20, 100]
       else:
-        assert False, "Task set not supported, choose among: 1, 2"
+        raise ValueError("Task set not supported, choose among: 1, 2")
     else:
-      assert False, "Dataset not supported, choose among: semantic-kitti, kitti-360"
+      raise ValueError("Dataset not supported, choose among: semantic-kitti, kitti-360")
 
     self.max_inst_id = 29
     known_inds = np.random.choice(len(cc.glasbey_bw), self.max_inst_id)

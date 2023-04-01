@@ -11,23 +11,6 @@ from PIL import Image
 import pdb
 
 
-def prepare_legend(frame_size):
-    legend = Image.open('/project_data/ramanan/achakrav/4D-PLS/outputs/Legend.png')
-    w1, h1 = frame_size
-    w2, h2 = legend.size
-    legend = legend.resize((3*w2, 3*h2))
-    img = Image.new('RGB', (w1, 3*h2), (255, 255, 255))
-    img.paste(legend, (20, 0)) # (w1-3*w2, 0)) # (w1//2 - 3*w2//2, 0))
-    return img
-
-
-def add_legend(frame, legend):
-    img = Image.new('RGB', (frame.width, frame.height+legend.height))
-    img.paste(frame, (0, 0))
-    img.paste(legend, (0, frame.height))
-    return img
-
-
 if __name__ == '__main__':
   parser = argparse.ArgumentParser("./visualize_kitti360.py")
   parser.add_argument(
