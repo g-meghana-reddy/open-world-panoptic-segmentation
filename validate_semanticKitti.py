@@ -85,7 +85,6 @@ class SemanticKittiConfig(Config):
                     'nearest_upsample',
                     'unary']
 
-
     ###################
     # KPConv parameters
     ###################
@@ -93,7 +92,7 @@ class SemanticKittiConfig(Config):
     # Radius of the input sphere
     in_radius = 6.0
     val_radius = 51.0
-    n_frames = 1 # 4
+    n_frames = 1  # 4
     max_in_points = 100000
     max_val_points = 100000
 
@@ -139,8 +138,10 @@ class SemanticKittiConfig(Config):
     # 'point2plane' fitting geometry by penalizing distance from deform point to input point triplet (not implemented)
     deform_fitting_mode = 'point2point'
     deform_fitting_power = 1.0              # Multiplier for the fitting/repulsive loss
-    deform_lr_factor = 0.1                  # Multiplier for learning rate applied to the deformations
-    repulse_extent = 1.2                    # Distance of repulsion for deformed kernel points
+    # Multiplier for learning rate applied to the deformations
+    deform_lr_factor = 0.1
+    # Distance of repulsion for deformed kernel points
+    repulse_extent = 1.2
 
     #####################
     # Training parameters
@@ -203,10 +204,14 @@ class SemanticKittiConfig(Config):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=2)
-    parser.add_argument("-p", "--prev_train_path", help="Directory to load checkpoint", default=None)
-    parser.add_argument("-i", "--chkp_idx", help="Index of checkpoint", type=int, default=None)
-    parser.add_argument("-s", "--saving_path", help="Path to save checkpoints", default=None)
+    parser.add_argument("-t", "--task_set",
+                        help="Task Set ID", type=int, default=2)
+    parser.add_argument("-p", "--prev_train_path",
+                        help="Directory to load checkpoint", default=None)
+    parser.add_argument("-i", "--chkp_idx",
+                        help="Index of checkpoint", type=int, default=None)
+    parser.add_argument("-s", "--saving_path",
+                        help="Path to save checkpoints", default=None)
     args = parser.parse_args()
     return args
 
@@ -245,7 +250,8 @@ if __name__ == '__main__':
     if previous_training_path:
 
         # Find all snapshot in the chosen training folder
-        chkp_path = os.path.join('results', 'checkpoints', previous_training_path, 'checkpoints')
+        chkp_path = os.path.join(
+            'results', 'checkpoints', previous_training_path, 'checkpoints')
         chkps = [f for f in os.listdir(chkp_path) if f[:4] == 'chkp']
 
         # Find which snapshot to restore
@@ -253,7 +259,8 @@ if __name__ == '__main__':
             chosen_chkp = 'current_chkp.tar'
         else:
             chosen_chkp = np.sort(chkps)[chkp_idx]
-        chosen_chkp = os.path.join('results', 'checkpoints', previous_training_path, 'checkpoints', chosen_chkp)
+        chosen_chkp = os.path.join(
+            'results', 'checkpoints', previous_training_path, 'checkpoints', chosen_chkp)
 
     else:
         chosen_chkp = None
@@ -262,7 +269,6 @@ if __name__ == '__main__':
     # Prepare Data
     ##############
 
-
     print()
     print('Data Preparation')
     print('****************')
@@ -270,7 +276,8 @@ if __name__ == '__main__':
     # Initialize configuration class
     config = SemanticKittiConfig()
     if previous_training_path:
-        config.load(os.path.join('results', 'checkpoints', previous_training_path))
+        config.load(os.path.join(
+            'results', 'checkpoints', previous_training_path))
     config.free_dim = 4
     config.n_frames = 1
     config.reinit_var = True
@@ -280,7 +287,7 @@ if __name__ == '__main__':
         config.stride = 1
         config.sampling = 'importance'
     else:
-        #n_frames==2
+        # n_frames==2
         config.stride = 2
         config.sampling = None
     config.decay_sampling = 'None'
@@ -315,7 +322,8 @@ if __name__ == '__main__':
 
     # Define network model
     t1 = time.time()
-    net = KPFCNN(config, test_dataset.label_values, test_dataset.ignored_labels)
+    net = KPFCNN(config, test_dataset.label_values,
+                 test_dataset.ignored_labels)
 
     # Define a trainer class
     tester = ModelTester(net, chkp_path=chosen_chkp)

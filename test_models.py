@@ -63,7 +63,8 @@ def model_choice(chosen_log):
         test_dataset = '_'.join(chosen_log.split('_')[1:])
 
         # List all training logs
-        logs = np.sort([os.path.join('results', f) for f in os.listdir('results') if f.startswith('Log')])
+        logs = np.sort([os.path.join('results', f)
+                       for f in os.listdir('results') if f.startswith('Log')])
 
         # Find the last log of asked dataset
         for log in logs[::-1]:
@@ -74,7 +75,8 @@ def model_choice(chosen_log):
                 break
 
         if chosen_log in ['last_ModelNet40', 'last_ShapeNetPart', 'last_S3DIS']:
-            raise ValueError('No log of the dataset "' + test_dataset + '" found')
+            raise ValueError('No log of the dataset "' +
+                             test_dataset + '" found')
 
     # Check if log exists
     if not os.path.exists(chosen_log):
@@ -91,9 +93,12 @@ def model_choice(chosen_log):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=2)
-    parser.add_argument("-c", "--chosen_log", help="Path to load checkpoint log", default=None)
-    parser.add_argument("-s", "--saving_path", help="Path to save checkpoints", default=None)
+    parser.add_argument("-t", "--task_set",
+                        help="Task Set ID", type=int, default=2)
+    parser.add_argument("-c", "--chosen_log",
+                        help="Path to load checkpoint log", default=None)
+    parser.add_argument("-s", "--saving_path",
+                        help="Path to save checkpoints", default=None)
     args = parser.parse_args()
     return args
 
@@ -118,7 +123,7 @@ if __name__ == '__main__':
     #       > '(old_)results/Log_YYYY-MM-DD_HH-MM-SS': Directly provide the path of a trained model
 
     # chosen_log = 'results/Log_2020-10-06_16-51-05'  # => ModelNet40
-    chosen_log = args.chosen_log # 'results/4DPLS_TS0'
+    chosen_log = args.chosen_log  # 'results/4DPLS_TS0'
 
     # Choose the index of the checkpoint to load OR None if you want to load the current checkpoint
     chkp_idx = None
@@ -159,7 +164,6 @@ if __name__ == '__main__':
     config = Config()
     config.load(chosen_log)
 
-
     ##################################
     # Change model parameters for test
     ##################################
@@ -170,7 +174,7 @@ if __name__ == '__main__':
     config.validation_size = 200
     config.input_threads = 16
     config.n_frames = 1
-    config.n_test_frames = 1 #it should be smaller than config.n_frames
+    config.n_test_frames = 1  # it should be smaller than config.n_frames
     if config.n_frames < config.n_test_frames:
         config.n_frames = config.n_test_frames
     config.big_gpu = True
@@ -183,7 +187,6 @@ if __name__ == '__main__':
 
     config.task_set = args.task_set
     config.saving_path = args.saving_path
-
 
     ##############
     # Prepare Data
@@ -204,11 +207,13 @@ if __name__ == '__main__':
         test_sampler = ModelNet40Sampler(test_dataset)
         collate_fn = ModelNet40Collate
     elif config.dataset == 'S3DIS':
-        test_dataset = S3DISDataset(config, set='validation', use_potentials=True)
+        test_dataset = S3DISDataset(
+            config, set='validation', use_potentials=True)
         test_sampler = S3DISSampler(test_dataset)
         collate_fn = S3DISCollate
     elif config.dataset == 'SemanticKitti':
-        test_dataset = SemanticKittiDataset(config, set=set, balance_classes=False, seqential_batch=True)
+        test_dataset = SemanticKittiDataset(
+            config, set=set, balance_classes=False, seqential_batch=True)
         test_sampler = SemanticKittiSampler(test_dataset)
         collate_fn = SemanticKittiCollate
     else:
@@ -233,9 +238,11 @@ if __name__ == '__main__':
     if config.dataset_task == 'classification':
         net = KPCNN(config)
     elif config.dataset_task in ['cloud_segmentation', 'slam_segmentation']:
-        net = KPFCNN(config, test_dataset.label_values, test_dataset.ignored_labels)
+        net = KPFCNN(config, test_dataset.label_values,
+                     test_dataset.ignored_labels)
     else:
-        raise ValueError('Unsupported dataset_task for testing: ' + config.dataset_task)
+        raise ValueError(
+            'Unsupported dataset_task for testing: ' + config.dataset_task)
 
     # Define a visualizer class
     tester = ModelTester(net, chkp_path=chosen_chkp)
@@ -243,9 +250,9 @@ if __name__ == '__main__':
 
     print('\nStart test')
     print('**********\n')
-    
+
     config.dataset_task = '4d_panoptic'
-    
+
     # Training
     if config.dataset_task == 'classification':
         a = 1/0
@@ -256,4 +263,5 @@ if __name__ == '__main__':
     elif config.dataset_task == '4d_panoptic':
         tester.panoptic_4d_test(net, test_loader, config)
     else:
-        raise ValueError('Unsupported dataset_task for testing: ' + config.dataset_task)
+        raise ValueError(
+            'Unsupported dataset_task for testing: ' + config.dataset_task)

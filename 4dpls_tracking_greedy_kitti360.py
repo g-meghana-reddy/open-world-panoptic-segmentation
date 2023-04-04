@@ -68,13 +68,13 @@ def main(FLAGS):
         doc = yaml.safe_load(stream)
         learning_map_doc = doc['task_set_map'][task_set]['learning_map']
         inv_learning_map_doc = doc['task_set_map'][task_set]['learning_map_inv']
-    
-    inv_learning_map = np.zeros((np.max([k for k in inv_learning_map_doc.keys()]) + 1), 
+
+    inv_learning_map = np.zeros((np.max([k for k in inv_learning_map_doc.keys()]) + 1),
                                 dtype=np.int32)
     for k, v in inv_learning_map_doc.items():
         inv_learning_map[k] = v
 
-    prediction_dir =  FLAGS.predictions
+    prediction_dir = FLAGS.predictions
     if split in ('training', 'valid'):
         prediction_path = '{}/val_probs'.format(prediction_dir)
     else:
@@ -90,10 +90,13 @@ def main(FLAGS):
     for sequence in test_sequences:
         seq_name = '2013_05_28_drive_{:04d}_sync'.format(sequence)
 
-        label_path = os.path.join(dataset, 'data_3d_raw_labels', seq_name, 'labels')
-        frame_ids = set(vf[:-6] for vf in os.listdir(label_path) if vf.endswith('.label'))
+        label_path = os.path.join(
+            dataset, 'data_3d_raw_labels', seq_name, 'labels')
+        frame_ids = set(vf[:-6]
+                        for vf in os.listdir(label_path) if vf.endswith('.label'))
 
-        poses_f64 = parse_poses(os.path.join(dataset, 'data_poses', seq_name, 'poses.txt'), calib, frame_ids)
+        poses_f64 = parse_poses(os.path.join(
+            dataset, 'data_poses', seq_name, 'poses.txt'), calib, frame_ids)
         poses.append([pose.astype(np.float32) for pose in poses_f64])
 
     total_time = 0.0
@@ -106,13 +109,16 @@ def main(FLAGS):
             os.makedirs(seq_save_dir)
 
         point_names = []
-        label_path = os.path.join(dataset, 'data_3d_raw_labels', seq_name, 'labels')
-        point_path = os.path.join(dataset, 'data_3d_raw', seq_name, 'velodyne_points', 'data')
+        label_path = os.path.join(
+            dataset, 'data_3d_raw_labels', seq_name, 'labels')
+        point_path = os.path.join(
+            dataset, 'data_3d_raw', seq_name, 'velodyne_points', 'data')
 
         # populate the label names
-        frame_ids = set(vf[:-6] for vf in os.listdir(label_path) if vf.endswith('.label'))
+        frame_ids = set(vf[:-6]
+                        for vf in os.listdir(label_path) if vf.endswith('.label'))
         seq_point_names = sorted([
-            os.path.join(point_path, fn) for fn in os.listdir(point_path) 
+            os.path.join(point_path, fn) for fn in os.listdir(point_path)
             if fn.endswith(".bin") and fn[:-4] in frame_ids
         ])
         point_names.extend(seq_point_names)
@@ -122,22 +128,26 @@ def main(FLAGS):
             file_id = point_file.split('/')[-1][:-4]
 
             # Load the semantic predictions
-            sem_path = os.path.join(prediction_path, '{0:s}_{1:s}.npy'.format(seq_name, file_id))
+            sem_path = os.path.join(
+                prediction_path, '{0:s}_{1:s}.npy'.format(seq_name, file_id))
             sem_labels = np.load(sem_path)
 
             # Load the unknown instance predictions
-            unknown_ins_path = os.path.join(prediction_path, '{0:s}_{1:s}_{2:s}.npy'.format(seq_name, file_id, inst_ext))
+            unknown_ins_path = os.path.join(
+                prediction_path, '{0:s}_{1:s}_{2:s}.npy'.format(seq_name, file_id, inst_ext))
             unknown_ins_labels = np.load(unknown_ins_path)
 
             # Load /create the tracked unknown predictions
-            unknown_track_path = os.path.join(save_dir, '{0:s}_{1:s}_t.npy'.format(seq_name, file_id))
+            unknown_track_path = os.path.join(
+                save_dir, '{0:s}_{1:s}_t.npy'.format(seq_name, file_id))
             unknown_track_labels = unknown_ins_labels.copy()
 
             # Load the points and project them to camera coordinates
-            points = np.fromfile(point_file, dtype=np.float32).reshape([-1,4])
+            points = np.fromfile(point_file, dtype=np.float32).reshape([-1, 4])
 
             hpoints = np.hstack((points[:, :3], np.ones_like(points[:, :1])))
-            new_points = np.sum(np.expand_dims(hpoints, 2) * poses_seq[idx].T, axis=1)
+            new_points = np.sum(np.expand_dims(hpoints, 2)
+                                * poses_seq[idx].T, axis=1)
             points = new_points[:, :3]
             points = torch.from_numpy(points)
             point_indexes = torch.arange(len(points))
@@ -162,7 +172,8 @@ def main(FLAGS):
                 # Create a dictionary of {center: corresponding points}
                 center = np.stack(center)
                 centers.append(center)
-                center2points[center.data.tobytes()] = point_indexes_unknown[ind]
+                center2points[center.data.tobytes(
+                )] = point_indexes_unknown[ind]
 
             # If there are no unknown points then assign the ids as it is
             if len(centers) == 0:
@@ -173,7 +184,8 @@ def main(FLAGS):
                 inv_sem_labels = inv_learning_map[sem_labels]
                 new_preds = np.bitwise_or(new_preds, inv_sem_labels)
 
-                new_preds.tofile('{0:s}/{1:s}.label'.format(seq_save_dir, file_id))
+                new_preds.tofile(
+                    '{0:s}/{1:s}.label'.format(seq_save_dir, file_id))
                 continue
             centers = np.stack(centers)
 
@@ -188,7 +200,7 @@ def main(FLAGS):
                 if trackers[trk_idx][0] == math.inf:
                     continue
                 inds = center2points[trackers[trk_idx].data.tobytes()]
-                unknown_track_labels[inds] = trk_idx #t_id+1
+                unknown_track_labels[inds] = trk_idx  # t_id+1
 
             unknown_track_labels = unknown_track_labels.astype(np.int32)
             new_preds = np.left_shift(unknown_track_labels, 16)
@@ -216,14 +228,14 @@ if __name__ == '__main__':
         type=str,
         required=True
     )
-    
+
     parser.add_argument(
-      '--data_cfg',
-      '-dc',
-      type=str,
-      required=False,
-      default="config/semantic-kitti.yaml",
-      help='Dataset config file. Defaults to %(default)s'
+        '--data_cfg',
+        '-dc',
+        type=str,
+        required=False,
+        default="config/semantic-kitti.yaml",
+        help='Dataset config file. Defaults to %(default)s'
     )
 
     parser.add_argument(
