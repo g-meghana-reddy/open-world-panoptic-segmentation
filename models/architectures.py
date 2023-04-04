@@ -512,7 +512,6 @@ class KPFCNN(nn.Module):
             raise ValueError('Unknown fitting mode: ' + self.deform_fitting_mode)
 
         # Combined loss
-        #return self.instance_loss + self.variance_loss
         return self.output_loss + self.reg_loss + self.center_loss + self.instance_loss*0.1+ self.variance_loss*0.01
 
     def ins_pred(self, predicted, centers_output, var_output, embedding, points=None, times=None):
@@ -525,8 +524,6 @@ class KPFCNN(nn.Module):
         :param points: xyz location of points
         :return: instance ids for all points
         """
-        #predicted = torch.argmax(outputs.data, dim=1)
-
         if var_output.shape[1] - embedding.shape[1] > 4:
             global_emb, _ = torch.max(embedding, 0, keepdim=True)
             embedding = torch.cat((embedding, global_emb.repeat(embedding.shape[0], 1)), 1)
@@ -546,7 +543,6 @@ class KPFCNN(nn.Module):
         counter = 0
         ins_id = 1
         while True:
-            # ins_idxs = torch.where((predicted < 9) & (predicted != 0) & (ins_prediction == 0))
             ins_idxs = torch.where((predicted < self.things) & (predicted != 0) & (ins_prediction == 0))
             if len(ins_idxs[0]) == 0:
                 break
@@ -560,7 +556,6 @@ class KPFCNN(nn.Module):
             idx = indices[0+counter]
             mean = ins_embeddings[idx]
             var = ins_variances[idx]
-            #probs = pdf_normal(ins_embeddings, mean, var)
             probs = new_pdf_normal(ins_embeddings, mean, var)
 
             ins_points = torch.where(probs >= 0.5)
@@ -645,16 +640,14 @@ class KPFCNN(nn.Module):
                 bbox, kalman_bbox = get_bbox_from_points(points[0][ids])
                 tracker = KalmanBoxTracker(kalman_bbox ,ins_id)
                 bbox_proj = None
-                #var = torch.mean(var_output[ids], 0, True)
                 new_instances[ins_id] = {'mean': mean, 'var': var, 'life' : 5, 'bbox': bbox, 'bbox_proj':bbox_proj, 'tracker': tracker, 'kalman_bbox' : kalman_bbox}
 
             counter = 0
             ins_id += 1
 
-        #associate instances by hungarian alg. & bbox prediction via kalman filter
+        # associate instances by hungarian alg. & bbox prediction via kalman filter
         if len(prev_instances.keys()) > 0 :
 
-            #association_costs, associations = self.associate_instances(config, prev_instances, new_instances, pose)
             associations = []
             for prev_id, new_id in associations:
                 ins_points = torch.where((ins_prediction == new_id))
@@ -714,12 +707,10 @@ class KPFCNN(nn.Module):
         associations = []
 
         for i1, i2 in zip(idxes_1, idxes_2):
-            #max_cost = torch.sum((previous_instances[prev_ids[i1]]['var'][0,-3:]/2)**2)
             if association_costs[i1][i2] < 1e8:
                 associations.append((prev_ids[i1], current_ids[i2]))
 
         return association_costs, associations
-
 
     def accuracy(self, outputs, labels):
         """

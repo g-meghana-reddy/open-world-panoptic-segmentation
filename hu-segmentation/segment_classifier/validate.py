@@ -44,7 +44,7 @@ class Config:
 
 def validate(cfg, model, val_loader, sem_weights=None):
     model.eval()
-    
+
     total_loss = 0.
     cls_gt, cls_pred, sem_gt, sem_pred = [], [], [], []
     num_batches = 0
@@ -66,7 +66,7 @@ def validate(cfg, model, val_loader, sem_weights=None):
         pred_cls, pred_sem = model(pts_input)
         if pred_cls is not None:
             pred_cls = pred_cls.view(-1)
-        
+
         pure_model = model.module if isinstance(model, torch.nn.DataParallel) else model
         loss = pure_model.loss_fn(pred_cls, pred_sem, batch, sem_weights=sem_weights, train=False)
         total_loss += loss.item()
@@ -92,6 +92,7 @@ def validate(cfg, model, val_loader, sem_weights=None):
     print(corr_pred/num_batches)
     return
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt", help="Checkpoint to load for segment classifier", type=str, default='/project_data/ramanan/mganesin/4D-PLS/results/checkpoints/xyz_mean/checkpoints/epoch_200.pth')
@@ -100,6 +101,7 @@ def parse_args():
     parser.add_argument('--use-sem-weights', action="store_true")
     args = parser.parse_args()
     return args
+
 
 if __name__ == "__main__":
     args = parse_args()
@@ -115,7 +117,7 @@ if __name__ == "__main__":
         feature_dims = 256
     else:
         feature_dims = 0
-    
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = PointNet2Classification(cfg, feature_dims).cuda()
     ckpt = torch.load(args.ckpt)
@@ -136,7 +138,7 @@ if __name__ == "__main__":
         sampler=valid_sampler,
         collate_fn=valid_dataset.collate_batch
     )
-    
+
     sem_weights = None
     with torch.no_grad():
         validate(cfg, model, val_loader, sem_weights)

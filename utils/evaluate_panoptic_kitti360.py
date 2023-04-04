@@ -149,18 +149,15 @@ if __name__ == '__main__':
     # populate the label names
     seq_label_names = sorted([os.path.join(label_paths, fn) for fn in os.listdir(label_paths) if fn.endswith(".label")])
     label_names.extend(seq_label_names)
-  # print(label_names)
 
   # get predictions paths
   pred_names = []
   for sequence in test_sequences:
     sequence = "2013_05_28_drive_{:04d}_sync".format(int(sequence))
-    # sequence = "sequences/{:02d}".format(int(sequence))
     pred_paths = os.path.join(FLAGS.predictions, sequence, "predictions")
     # populate the label names
     seq_pred_names = sorted([os.path.join(pred_paths, fn) for fn in os.listdir(pred_paths) if fn.endswith(".label")])
     pred_names.extend(seq_pred_names)
-  # print(pred_names)
 
 
   # check that I have the same number of files
@@ -199,8 +196,6 @@ if __name__ == '__main__':
       mask = np.zeros_like(u_label_inst, dtype=bool)
       for cls_ in unknown_stuff_classes:
         mask = np.logical_or(mask, (label & 0xFFFF) == cls_)
-
-
 
     label = np.fromfile(pred_file, dtype=np.uint32)
 
@@ -250,17 +245,6 @@ if __name__ == '__main__':
   class_all_Prec = class_all_Prec.flatten().tolist()
   class_all_Recall = class_all_Recall.flatten().tolist()
 
-  # fill in with the raw values
-  # output_dict["raw"] = {}
-  # output_dict["raw"]["class_PQ"] = class_PQ
-  # output_dict["raw"]["class_SQ"] = class_SQ
-  # output_dict["raw"]["class_RQ"] = class_RQ
-  # output_dict["raw"]["class_all_PQ"] = class_all_PQ
-  # output_dict["raw"]["class_all_SQ"] = class_all_SQ
-  # output_dict["raw"]["class_all_RQ"] = class_all_RQ
-  # output_dict["raw"]["class_IoU"] = class_IoU
-  # output_dict["raw"]["class_all_IoU"] = class_all_IoU
-
   if FLAGS.task_set == 0:
     things = ['car', 'person', 'catch-all']
     stuff = ['road', 'building', 'vegetation', 'fence']
@@ -276,7 +260,6 @@ if __name__ == '__main__':
   all_classes = things + stuff
 
   # class
-
   output_dict["all"] = {}
   output_dict["all"]["PQ"] = class_PQ
   output_dict["all"]["SQ"] = class_SQ
@@ -295,7 +278,7 @@ if __name__ == '__main__':
     output_dict[class_str]["UQ"] = uq
     output_dict[class_str]["Prec"] = class_all_Prec[idx]
     output_dict[class_str]["Recall"] = class_all_Recall[idx]
-  
+
   PQ_all = np.mean([float(output_dict[c]["PQ"]) for c in all_classes])
   PQ_known = np.mean([float(output_dict[c]["PQ"]) for c in all_classes if c != 'catch-all'])
   PQ_dagger = np.mean([float(output_dict[c]["PQ"]) for c in things] + [float(output_dict[c]["IoU"]) for c in stuff])

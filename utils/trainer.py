@@ -140,7 +140,6 @@ class ModelTrainer:
                 net.train()
                 print("Model and training state restored.")
 
-
         # Path of the result folder
         if config.saving:
             if config.saving_path is None:
@@ -187,7 +186,6 @@ class ModelTrainer:
         t = [time.time()]
         last_display = time.time()
         mean_dt = np.zeros(1)
-
 
         # Start training loop
         for epoch in range(config.max_epoch):
@@ -261,8 +259,6 @@ class ModelTrainer:
                 # log to wandb
                 if config.wandb:
                     losses.append(loss.item())
-                    
-
 
                 # Log file
                 if config.saving:
@@ -276,13 +272,12 @@ class ModelTrainer:
                                                   t[-1] - t0))
 
                 self.step += 1
-            
+
             if config.wandb:
                 loss_val = np.mean(np.array(losses))
                 wandb.log({
                             'Train/Epoch': epoch,
                             'Train/Loss': loss_val,
-                            
                         })
             ##############
             # End of epoch
@@ -486,9 +481,6 @@ class ModelTrainer:
 
         # Number of classes predicted by the model
         nc_model = config.num_classes
-
-        # print(nc_tot)
-        # print(nc_model)
 
         # Initiate global prediction over validation clouds
         if not hasattr(self, 'validation_probs'):
@@ -771,8 +763,6 @@ class ModelTrainer:
                         batch.labels, batch.ins_labels, batch.centers, 
                         batch.points, batch.times.unsqueeze(1))
                     losses.append(loss.item())
-                    
-                    
 
                 if not config.pre_train and self.epoch > 50:
                     for l_ind, label_value in enumerate(val_loader.dataset.label_values):
@@ -821,7 +811,6 @@ class ModelTrainer:
                 proj_probs = probs[proj_inds]
                 proj_center_probs = center_props[proj_inds]
                 proj_ins_probs = ins_probs[proj_inds]
-                #proj_offset_probs = offset_probs[proj_inds]
                 proj_emb = emb[proj_inds]
 
                 # Safe check if only one point:
@@ -848,7 +837,7 @@ class ModelTrainer:
                 filepath_c = join(config.saving_path, 'val_preds', filename_c)
                 filepath_i = join(config.saving_path, 'val_preds', filename_i)
                 filepath_e = join(config.saving_path, 'val_preds', filename_e)
-                
+
                 if exists(filepath):
                     frame_preds = np.load(filepath)
                     center_preds = np.load(filepath_c)
@@ -871,7 +860,6 @@ class ModelTrainer:
                 np.save(filepath_e, emb_preds)
 
                 centers_gt = batch.val_centers.cpu().detach().numpy()
-                #ins_label_gt = batch.val_ins_labels.cpu().detach().numpy()
 
                 center_gt = centers_gt[:, 0]
 
@@ -882,7 +870,6 @@ class ModelTrainer:
 
                 # Save some of the frame pots
                 if f_ind % 20 == 0:
-                    
                     seq_path = join(val_loader.dataset.path, 'sequences', val_loader.dataset.sequences[s_ind])
                     velo_file = join(seq_path, 'velodyne', val_loader.dataset.frames[s_ind][f_ind] + '.bin')
 
@@ -892,7 +879,6 @@ class ModelTrainer:
                               [frame_points[:, :3], frame_labels, frame_preds],
                               ['x', 'y', 'z', 'gt', 'pre'])
 
-                
                 # Update validation confusions
                 frame_C = fast_confusion(frame_labels,
                                         frame_preds.astype(np.int32),
@@ -919,7 +905,7 @@ class ModelTrainer:
                                      1000 * (mean_dt[1])))
 
         t2 = time.time()
-        
+
         if config.wandb:
             losses = np.array(losses)
             loss_val = np.mean(losses)
@@ -1027,7 +1013,7 @@ class ModelTrainer:
             print('Validation timings:')
             print('Init ...... {:.1f}s'.format(t1 - t0))
             print('Loop ...... {:.1f}s'.format(t2 - t1))
-            
+
             print('Confs ..... {:.1f}s'.format(t3 - t2))
             print('IoU1 ...... {:.1f}s'.format(t4 - t3))
             print('IoU2 ...... {:.1f}s'.format(t5 - t4))

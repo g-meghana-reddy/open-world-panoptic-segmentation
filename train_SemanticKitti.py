@@ -24,6 +24,7 @@
 # Common libs
 import argparse
 import signal
+import os
 
 # Dataset
 from datasets.SemanticKitti import *
@@ -204,7 +205,7 @@ class SemanticKittiConfig(Config):
 
     # Only train class and center head
     pre_train = False
-    
+
     # use wandb for logging
     wandb = False
 
@@ -247,7 +248,6 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = GPU_ID
 
     args = parse_args()
-    
     if args.wandb:
         wandb.init(project="mscv-capstone")
 
@@ -291,7 +291,7 @@ if __name__ == '__main__':
         config.saving_path = None
     config.pre_train = args.pretrain
     config.free_dim = 4
-    config.n_frames = 1 # 4
+    config.n_frames = 1  # 4
     config.reinit_var = True
     config.n_test_frames = 1
     #config.sampling = 'objectness'
@@ -303,9 +303,6 @@ if __name__ == '__main__':
         config.stride = 2
         config.sampling = None
     config.decay_sampling = 'None'
-    # Get path from argument if given
-    # if len(sys.argv) > 1:
-    #     config.saving_path = sys.argv[1]
 
     config.task_set = args.task_set
     config.saving_path = args.saving_path
@@ -350,10 +347,6 @@ if __name__ == '__main__':
     # Calibrate samplers
     training_sampler.calibration(training_loader, verbose=True)
     test_sampler.calibration(test_loader, verbose=True)
-
-    # debug_timing(training_dataset, training_loader)
-    # debug_timing(test_dataset, test_loader)
-    # debug_class_w(training_dataset, training_loader)
 
     print('\nModel Preparation')
     print('*****************')

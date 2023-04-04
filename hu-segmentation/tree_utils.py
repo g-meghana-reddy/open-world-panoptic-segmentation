@@ -1,8 +1,10 @@
 def is_list(v):
   return isinstance(v, list)
 
+
 def is_list_of_type(v, t):
   return is_list(v) and all(isinstance(e, t) for e in v)
+
 
 def flatten_indices(indices):
     # indices could be nested nested list, we convert them to nested list
@@ -17,6 +19,7 @@ def flatten_indices(indices):
         else: flat_indices.extend(flatten_indices(inds))
     return flat_indices
 
+
 def flatten_scores(scores):
     # scores could be nested list, we convert them to list of floats
     if isinstance(scores, float): return scores
@@ -27,6 +30,7 @@ def flatten_scores(scores):
         if isinstance(score, float): flat_scores.append(score)
         else: flat_scores.extend(flatten_scores(score))
     return flat_scores
+
 
 def flatten_labels(labels):
     # labels could be nested list, we convert them to list of label
@@ -39,17 +43,14 @@ def flatten_labels(labels):
         else: flat_labels.extend(flatten_labels(label))
     return flat_labels
 
+
 class Segment():
   def __init__(self, indices, score):
     self.indices = indices
     self.score = score
 
+
 class TreeSegment():
   def __init__(self, indices, score):
     self.child_segments = None
     self.curr_segment_data = Segment(indices, score)
-    
-
-
-  
-

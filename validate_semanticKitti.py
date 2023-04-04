@@ -7,6 +7,7 @@
 # Common libs
 import argparse
 import signal
+import os
 
 # Dataset
 from datasets.SemanticKitti import *
@@ -199,6 +200,7 @@ class SemanticKittiConfig(Config):
 #       \******************/
 #
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=2)
@@ -299,7 +301,7 @@ if __name__ == '__main__':
                              batch_size=1,
                              sampler=test_sampler,
                              collate_fn=SemanticKittiCollate,
-                             num_workers=0, # config.input_threads,
+                             num_workers=0,  # config.input_threads,
                              pin_memory=True)
 
     # Calibrate max_in_point value
@@ -316,7 +318,6 @@ if __name__ == '__main__':
     net = KPFCNN(config, test_dataset.label_values, test_dataset.ignored_labels)
 
     # Define a trainer class
-    #trainer = ModelTrainer(net, config, chkp_path=chosen_chkp)
     tester = ModelTester(net, chkp_path=chosen_chkp)
     print('Done in {:.1f}s\n'.format(time.time() - t1))
 

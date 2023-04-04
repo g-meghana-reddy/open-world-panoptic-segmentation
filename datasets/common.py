@@ -41,6 +41,7 @@ import cpp_wrappers.cpp_neighbors.radius_neighbors as cpp_neighbors
 #       \***********************/
 #
 
+
 def grid_subsampling(points, features=None, labels=None, ins_labels=None, sampleDl=0.1, verbose=0):
     """
     CPP wrapper for a grid subsampling (method = barycenter for points and features)
@@ -314,7 +315,6 @@ class PointCloudDataset(Dataset):
         ##################
 
         # Do not use np.dot because it is multi-threaded
-        #augmented_points = np.dot(points, R) * scale + noise
         augmented_points = np.sum(np.expand_dims(points, 2) * R, axis=1) * scale + noise
 
 
@@ -459,7 +459,6 @@ class PointCloudDataset(Dataset):
 
         return li
 
-
     def segmentation_inputs(self,
                             stacked_points,
                             stacked_features,
@@ -577,16 +576,3 @@ class PointCloudDataset(Dataset):
         li += [stacked_features, labels]
 
         return li
-
-
-
-
-
-
-
-
-
-
-
-
-

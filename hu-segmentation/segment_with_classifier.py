@@ -202,19 +202,11 @@ if __name__ == '__main__':
         raise ValueError('Unknown task set: {}'.format(args.task_set))
 
     if args.use_sem_refinement:
-        in_channels = 256 # 0
-        # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats_sem_refinement_weighted/checkpoints/epoch_200.pth"
+        in_channels = 256
     elif args.use_sem_features:
         in_channels = 256
-        # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats/checkpoints/epoch_50.pth"
     else:
         in_channels = 0
-        # if args.task_set == -1:
-            # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_regression_MSE_LOSS_200_double_mlp_full_dataset/checkpoints/epoch_200.pth"
-        # elif args.task_set == 1:
-            # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_{}_TS1/checkpoints/epoch_200.pth".format(args.network)
-        # else:
-            # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_{}_TS2/checkpoints/epoch_200.pth".format(args.network)
 
     # instantiate the segment classifier
     cfg = Config()
@@ -286,7 +278,7 @@ if __name__ == '__main__':
                                 dtype=np.int32)
             for k, v in learning_map_inv.items():
                 inv_learning_map[k] = v
-        
+
     objsem_folder = args.objsem_folder
     objsem_files = load_paths(objsem_folder)
     if args.dataset == "kitti-360":
@@ -303,20 +295,12 @@ if __name__ == '__main__':
         if '_c.' in file:
             obj_file_mask.append(idx)
         elif '_i.' in file:
-            # Added for nframes=2
-            # frame_name = file.split('/')[-1]
-            # if len(frame_name.split('_')) < 4:
             ins_file_mask.append(idx)
         elif '_e' in file:
-            # frame_name = file.split('/')[-1]
-            # if len(frame_name.split('_')) < 4:
             emb_file_mask.append(idx)
         elif '_u.' not in file and '_t.' not in file and '_pots.' not in file and '.ply' not in file and '_s.' not in file:
-            # Added for nframes=2
-            # frame_name = file.split('/')[-1]
-            # if len(frame_name.split('_')) < 3:
             sem_file_mask.append(idx)
-    
+
     objectness_files = objsem_files[obj_file_mask]
     semantic_files = objsem_files[sem_file_mask]
     instance_files = objsem_files[ins_file_mask]
@@ -355,11 +339,6 @@ if __name__ == '__main__':
         else:
             semantic_features = None
 
-
-        # if len(unk_labels) == 1:
-        #     mask = np.where(labels == unk_labels[0])
-        # else:
-        #     mask = np.where(np.logical_and(labels > 0, labels < np.max(unk_labels)))
         mask = np.logical_and(labels > 0, labels == unk_labels[0])
         for known_label in known_labels:
             mask = np.logical_or(mask, labels == known_label)

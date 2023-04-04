@@ -691,4 +691,3 @@ class MaxPoolBlock(nn.Module):
 
     def forward(self, x, batch):
         return max_pool(x, batch.pools[self.layer_ind + 1])
-

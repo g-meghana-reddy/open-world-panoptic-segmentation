@@ -109,18 +109,12 @@ def main(FLAGS):
             trackers = mot_tracker.update(dets_all)
             cycle_time = time.time() - start_time
             total_time += cycle_time
-            
-#TODO: Remove Outliers!!!!!
 
-#             save_trk_file = os.path.join('.', '%06d.txt' % idx)
-#             save_bbox2point_file = os.path.join('.', '%06d_bbox2points.txt' % idx)
-#             save_trk_file = open(save_trk_file, 'w')
-#             save_bbox2point_file = open(save_bbox2point_file, 'w')
             for d in trackers:
                 bbox3d_tmp = d[0:7].astype(np.float32) # h, w, l, x, y, z, theta in camera coord 
                 id_tmp = d[7]
                 ori_tmp = d[8]    
-                
+
                 x1, y1, z1, x2, y2, z2 = kalman_box_to_eight_point(bbox3d_tmp)
                 poi_inds = reduce(np.intersect1d, (
                     np.where(points[:, 0] > x1),
@@ -130,20 +124,8 @@ def main(FLAGS):
                     np.where(points[:, 2] > z1),
                     np.where(points[:, 2] < z2)
                 ))
-                
-                unknown_trk_labels[poi_inds] = id_tmp
-#                 if bbox3d_tmp.tobytes() in bbox2points:
-#                     ind = bbox2points[bbox3d_tmp.tobytes()]
-#                     unknown_trk_labels[ind] = id_tmp
-                    
-#                 str_to_srite = '%f %f %f %f %f %f %f %d\n' % (
-#                     bbox3d_tmp[0], bbox3d_tmp[1], bbox3d_tmp[2], bbox3d_tmp[3],
-#                     bbox3d_tmp[4], bbox3d_tmp[5], bbox3d_tmp[6], id_tmp)
-#                 str_to_srite += str(poi_inds)
-#                 save_trk_file.write(str_to_srite)
-            #save_bbox2point_file.write(str(bbox2points))
 
-            # np.save(unknown_track_path, unknown_trk_labels)
+                unknown_trk_labels[poi_inds] = id_tmp
             unknown_trk_labels = unknown_trk_labels.astype(np.int32)
             new_preds = np.left_shift(unknown_trk_labels, 16)
 
@@ -153,6 +135,7 @@ def main(FLAGS):
 
             new_preds.tofile('{}/sequences/{:02d}/predictions/{:06d}.label'.format(
                 save_dir, sequence, idx))
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser("./stitch_tracklets.py")
@@ -170,7 +153,7 @@ if __name__ == '__main__':
         type=str,
         required=True
     )
-    
+
     parser.add_argument(
       '--data_cfg',
       '-dc',

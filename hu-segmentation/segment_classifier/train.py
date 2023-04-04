@@ -62,6 +62,7 @@ class Config:
 
     PRETRAIN = 0.0
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Arg parser")
     parser.add_argument('--exp', type=str, default="xyz_mean_regression_MSE_LOSS_200_double_mlp")
@@ -75,10 +76,6 @@ def parse_args():
     parser.add_argument('--finetune', action="store_true")
     parser.add_argument('--pretrain_ckpt', type=str, default='../../results/checkpoints/xyz_sem_mean_SA_pos_embedding_pretrain/checkpoints/epoch_100.pth')
     return parser.parse_args()
-
-# __C.TRAIN.MOMS = [0.95, 0.85]
-# __C.TRAIN.DIV_FACTOR = 10.0
-# __C.TRAIN.PCT_START = 0.4
 
 
 def create_optimizer(cfg, model):
@@ -200,7 +197,7 @@ def validate(cfg, model, val_loader, sem_weights=None):
         pred_cls, pred_sem = model(pts_input)
         if pred_cls is not None:
             pred_cls = pred_cls.view(-1)
-        
+
         pure_model = model.module if isinstance(model, torch.nn.DataParallel) else model
         loss = pure_model.loss_fn(pred_cls, pred_sem, batch, sem_weights=sem_weights, train=False)
         total_loss += loss.item()
@@ -245,7 +242,7 @@ def add_metrics(metric_dict, gt, pred, name):
     values = []
     gt_arr = np.array(gt)
     gt_unique = np.unique(gt_arr)
-    
+
     for g in list(gt_unique):
         keys += ['val/acc_{}'.format(g)]
         values += [accuracy_score(gt_arr[gt_arr==g], np.array(pred)[gt_arr==g])]
@@ -283,19 +280,13 @@ if __name__ == "__main__":
         feature_dims = 256
     else:
         feature_dims = 0
-    
+
     if cfg.USE_WANDB:
         wandb.init("segment-classifier")
         wandb.run.name = args.exp
-    
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = PointNet2Classification(cfg, input_channels=feature_dims, num_classes=1)
-    # if not cfg.PRETRAIN:
-    #     model = PointNet2Classification(cfg, input_channels=feature_dims, num_classes=1)
-    # else:
-    #     model = PointNet2Classification(cfg, feature_dims).cuda()
-    #     ckpt = torch.load(args.pretrain_ckpt)
-    #     model.load_state_dict(ckpt["model_state"])
 
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
@@ -345,7 +336,7 @@ if __name__ == "__main__":
         sem_weights = torch.from_numpy(train_dataset.sem_weights).cuda().float()
     else:
         sem_weights = None
-    
+
     train(
         cfg, model, optimizer, train_loader, sem_weights=sem_weights, 
         val_loader=valid_loader, ckpt_dir=ckpt_dir

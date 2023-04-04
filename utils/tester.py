@@ -582,33 +582,6 @@ class ModelTester:
 
                         np.save(filepath, frame_preds)
                         np.save(filepath_s, frame_probs_softmax)
-                        
-                        # Save some of the frame pots
-#                         if f_ind % 20 == 0:
-#                             seq_path = join(test_loader.dataset.path, 'sequences', test_loader.dataset.sequences[s_ind])
-#                             velo_file = join(seq_path, 'velodyne', test_loader.dataset.frames[s_ind][f_ind] + '.bin')
-#                             frame_points = np.fromfile(velo_file, dtype=np.float32)
-#                             frame_points = frame_points.reshape((-1, 4))
-#                             predpath = join(test_path, pred_folder, filename[:-4] + '.ply')
-#                             #pots = test_loader.dataset.f_potentials[s_ind][f_ind]
-#                             pots = np.zeros((0,))
-#                             if pots.shape[0] > 0:
-#                                 write_ply(predpath,
-#                                           [frame_points[:, :3], frame_labels, frame_preds, pots],
-#                                           ['x', 'y', 'z', 'gt', 'pre', 'pots'])
-#                             else:
-#                                 write_ply(predpath,
-#                                           [frame_points[:, :3], frame_labels, frame_preds],
-#                                           ['x', 'y', 'z', 'gt', 'pre'])
-
-#                             # Also Save lbl probabilities
-#                             probpath = join(test_path, folder, filename[:-4] + '_probs.ply')
-#                             lbl_names = [test_loader.dataset.label_to_names[l]
-#                                          for l in test_loader.dataset.label_values
-#                                          if l not in test_loader.dataset.ignored_labels]
-#                             write_ply(probpath,
-#                                       [frame_points[:, :3], frame_probs_uint8],
-#                                       ['x', 'y', 'z'] + lbl_names)
 
                         # keep frame preds in memory
                         all_f_preds[s_ind][f_ind] = frame_preds
@@ -625,23 +598,6 @@ class ModelTester:
                         frame_preds = test_loader.dataset.label_values[np.argmax(frame_probs_uint8,
                                                                                  axis=1)].astype(np.int32)
                         np.save(filepath, frame_preds)
-                        # if f_inds[b_i, 1] % 100 == 0:
-                        #     # Load points
-                        #     seq_path = join(test_loader.dataset.path, 'sequences', test_loader.dataset.sequences[s_ind])
-                        #     velo_file = join(seq_path, 'velodyne', test_loader.dataset.frames[s_ind][f_ind] + '.bin')
-                        #     frame_points = np.fromfile(velo_file, dtype=np.float32)
-                        #     frame_points = frame_points.reshape((-1, 4))
-                        #     predpath = join(test_path, pred_folder, filename[:-4] + '.ply')
-                        #     #pots = test_loader.dataset.f_potentials[s_ind][f_ind]
-                        #     pots = np.zeros((0,))
-                        #     if pots.shape[0] > 0:
-                        #         write_ply(predpath,
-                        #                   [frame_points[:, :3], frame_preds, pots],
-                        #                   ['x', 'y', 'z', 'pre', 'pots'])
-                        #     else:
-                        #         write_ply(predpath,
-                        #                   [frame_points[:, :3], frame_preds],
-                        #                   ['x', 'y', 'z', 'pre'])
 
                     # Stack all prediction for this epoch
                     i0 += length
@@ -771,19 +727,6 @@ class ModelTester:
         test_path = None
         report_path = None
 
-        #meghana if config.dataset_task == '4d_panoptic':
-
-        #meghana     #assoc_saving = [asc_type for idx, asc_type in enumerate(config.association_types) if config.association_weights[idx] > 0]
-        #meghana     #assoc_saving.append(str(config.n_test_frames))
-        #meghana     #assoc_saving = '_'.join(assoc_saving)
-        #meghana     assoc_saving = config.sampling
-        #meghana     config.assoc_saving = config.sampling+'_'+ config.decay_sampling
-        #meghana     if hasattr(config, 'stride'):
-        #meghana         config.assoc_saving = config.sampling + '_' + config.decay_sampling+ '_str' + str(config.stride) +'_'
-        #meghana     if hasattr(config, 'big_gpu') and config.big_gpu:
-        #meghana         config.assoc_saving = config.assoc_saving + 'bigpug_'
-
-
         if config.saving:
             test_path = join('results', 'validation', config.saving_path.split('/')[-1])
             if not exists(test_path):
@@ -845,9 +788,6 @@ class ModelTester:
 
                 if processed == test_loader.dataset.all_inds.shape[0]:
                     return
-                #if not flag:
-                #    continue
-                #else:
                 processed +=1
 
                 if 'cuda' in self.device.type:
@@ -856,8 +796,6 @@ class ModelTester:
                 with torch.no_grad():
 
                     outputs, centers_output, var_output, embedding = net(batch, config)
-                    #ins_preds = torch.zeros(outputs.shape[0])
-
                     probs = softmax(outputs).cpu().detach().numpy()
 
                     for l_ind, label_value in enumerate(test_loader.dataset.label_values):
@@ -870,7 +808,6 @@ class ModelTester:
                     pose = test_loader.dataset.poses[batch.frame_inds[0][0]][batch.frame_inds[0][1]]
                     if sequence not in self.instances:
                         self.instances[sequence] = {}
-                    #ins_preds = net.ins_pred(preds, centers_output, var_output, embedding, batch.points)
                     ins_preds, new_instances, ins_id = net.ins_pred_in_time(config, preds, centers_output, var_output, embedding, self.instances[sequence],
                                                      self.next_ins_id, batch.points, batch.times.unsqueeze(1), pose)
 
@@ -947,10 +884,6 @@ class ModelTester:
                     filepath_i = join(test_path, folder, filename_i)
                     filepath_c = join(test_path, folder, filename_c)
 
-                    #if exists(filepath):
-                    #    frame_probs_uint8 = np.load(filepath)
-                    #    ins_preds = np.load(filepath_i)
-                    #else:
                     frame_probs_uint8 = np.zeros((proj_mask.shape[0], nc_model), dtype=np.uint8)
                     frame_c_probs = np.zeros((proj_mask.shape[0], 1))
                     ins_preds = np.zeros((proj_mask.shape[0]))
@@ -961,8 +894,6 @@ class ModelTester:
                     ins_preds[proj_mask] = proj_ins_probs
                     frame_c_probs[proj_mask] = proj_c_probs
 
-                    #np.save(filepath, frame_probs_uint8)
-                    #print ('Saving {}'.format(filepath_i))
                     np.save(filepath_i, ins_preds)
                     np.save(filepath_c, frame_c_probs)
 
@@ -972,7 +903,6 @@ class ModelTester:
                             ins_features[int(ins_id)] = self.instances[sequence][int(ins_id)]['mean']
                     filename_f = '{:s}_{:07d}_f.npy'.format(seq_name, f_ind)
                     filepath_f = join(test_path, folder, filename_f)
-                    #np.save(filepath_f, ins_features)
 
                     if config.n_test_frames > 1:
                         for fi in range(len(f_inc_r_inds_list[b_i])):
@@ -1002,7 +932,6 @@ class ModelTester:
 
                             filename_i = '{:s}_{:07d}_{}_i.npy'.format(seq_name, f_ind - fi - 1, f_ind)
                             filepath_i = join(test_path, folder, filename_i)
-                            #('Saving {}'.format(filepath_i))
                             np.save(filepath_i, ins_preds)
 
                             filename_p = '{:s}_{:07d}_{}.npy'.format(seq_name, f_ind-fi-1, f_ind)
@@ -1016,7 +945,6 @@ class ModelTester:
                                     ins_features[int(ins_id)] = self.instances[sequence][int(ins_id)]['mean']
                             filename_f = '{:s}_{:07d}_{}_f.npy'.format(seq_name, f_ind-fi-1, f_ind)
                             filepath_f = join(test_path, folder, filename_f)
-                            #np.save(filepath_f, ins_features)
 
                     # Save some prediction in ply format for visual
                     if test_loader.dataset.set == 'validation':
@@ -1041,7 +969,6 @@ class ModelTester:
                             frame_points = np.fromfile(velo_file, dtype=np.float32)
                             frame_points = frame_points.reshape((-1, 4))
                             predpath = join(test_path, pred_folder, filename[:-4] + '.ply')
-                            #pots = test_loader.dataset.f_potentials[s_ind][f_ind]
                             pots = np.zeros((0,))
                             if pots.shape[0] > 0:
                                 write_ply(predpath,
@@ -1083,7 +1010,6 @@ class ModelTester:
                             frame_points = np.fromfile(velo_file, dtype=np.float32)
                             frame_points = frame_points.reshape((-1, 4))
                             predpath = join(test_path, pred_folder, filename[:-4] + '.ply')
-                            #pots = test_loader.dataset.f_potentials[s_ind][f_ind]
                             pots = np.zeros((0,))
                             if pots.shape[0] > 0:
                                 write_ply(predpath,

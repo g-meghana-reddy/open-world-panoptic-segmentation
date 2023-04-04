@@ -126,7 +126,6 @@ class SemanticKittiDataset(PointCloudDataset):
         if config.n_test_frames > 1 and config.big_gpu:
             mem_gb = torch.cuda.get_device_properties(torch.device('cuda')).total_memory / (1024*1024*1024)
             self.gpu_r  = mem_gb / 11.9
-            #config.max_val_points *= config.n_test_frames# int(config.max_val_points * ratio)
 
         with open(config_file, 'r') as stream:
             doc = yaml.safe_load(stream)
@@ -263,11 +262,11 @@ class SemanticKittiDataset(PointCloudDataset):
 
         # Initiate concatanation lists
         c_list = []
-        t_list = [] # times
+        t_list = []  # times
         p_list = []
         f_list = []
         l_list = []
-        u_list = [] # unknown labels
+        u_list = []  # unknown labels
         ins_l_list = []
         fi_list = []
         p0_list = []
@@ -297,11 +296,6 @@ class SemanticKittiDataset(PointCloudDataset):
                 # Update epoch indice
                 self.epoch_i += 1
 
-
-            #print (ind)
-            #if self.seqential_batch:
-            #    s_ind, f_ind = self.all_inds[batch_i]
-            #else:
             s_ind, f_ind = self.all_inds[ind]
 
             t += [time.time()]
@@ -384,17 +378,14 @@ class SemanticKittiDataset(PointCloudDataset):
                     if self.task_set in (0, 1, 2):
                         ins_labels[sem_labels == self.unknown_label] = 0
 
-                    # center_labels = (center_labels > 0.3) * 1
                     center_labels = center_labels.astype(np.float32)
 
                     if self.return_unknowns:
                         unk_labels = frame_labels & 0xFFFF  # semantic label in lower half
-                
+
                 # Apply pose (without np.dot to avoid multi-threading)
                 hpoints = np.hstack((points[:, :3], np.ones_like(points[:, :1])))
-                #new_points = hpoints.dot(pose.T)
                 new_points = np.sum(np.expand_dims(hpoints, 2) * pose.T, axis=1)
-                #new_points[:, 3:] = points[:, 3:]
 
                 # In case of validation, keep the original points in memory
                 if self.set in ['validation', 'test'] and f_inc == 0:
@@ -420,13 +411,11 @@ class SemanticKittiDataset(PointCloudDataset):
                 mask = np.sum(np.square(new_points[:, :3] - p0), axis=1) < self.in_R ** 2
 
                 if self.set in ['training', 'validation']  and f_inc > 0 and  self.config.n_test_frames == 1:#during training
-                    #eliminate points which are not belong to any instance class for future frame
+                    # eliminate points which are not belong to any instance class for future frame
 
                     if self.config.sampling == 'objectness':
-                        # mask = ((sem_labels > 0) & (sem_labels < 9) & mask)
                         mask = ((sem_labels > 0) & (sem_labels < self.things) & mask)
                     elif self.config.sampling == 'importance':
-                        # n_points_to_sample = np.sum((sem_labels > 0) & (sem_labels < 9))
                         n_points_to_sample = np.sum((sem_labels > 0) & (sem_labels < self.things))
                         probs = (center_labels[:,0] + 0.1)
                         idxs = np.random.choice(np.arange(center_labels.shape[0]), n_points_to_sample, p=probs/np.sum(probs))
@@ -460,7 +449,6 @@ class SemanticKittiDataset(PointCloudDataset):
                                 continue
                         #eliminate points which are not belong to any instance class for future frame
                         if label_pred is not None:
-                            # mask = (( label_pred > 0) & (label_pred < 9) & mask)
                             mask = (( label_pred > 0) & (label_pred < self.things) & mask)
                     elif self.config.sampling == 'importance':
                         filename = '{:s}_{:07d}_c.npy'.format(self.sequences[s_ind], f_ind - f_inc)
@@ -513,14 +501,12 @@ class SemanticKittiDataset(PointCloudDataset):
                     new_coords = np.sum(np.expand_dims(new_coords, 2) * pose0[:3, :3], axis=1)
                     new_coords = np.hstack((new_coords, points[rand_order, 3:]))
 
-                #center_labels = np.reshape(center_labels,(-1,1))
                 d_coords = new_coords.shape[1]
                 d_centers = center_labels.shape[1]
                 times = np.ones((center_labels.shape[0],1)) * f_inc
                 times = times.astype(np.float32)
                 new_coords = np.hstack((new_coords, center_labels))
                 new_coords = np.hstack((new_coords, times))
-                #labels = np.hstack((sem_labels, ins_labels))
                 # Increment merge count
 
                 if f_inc == 0 or (hasattr(self.config, 'stride') and f_inc % self.config.stride == 0):
@@ -671,8 +657,6 @@ class SemanticKittiDataset(PointCloudDataset):
         ###################
         # Concatenate batch
         ###################
-        #print (c_list.shape)
-        # centers = np.concatenate(c_list, axis=0) if not self.set  in ['validation', 'test'] else np.concatenate(val_center_label_list, axis=0)
         centers = np.concatenate(c_list, axis=0)
         times = np.concatenate(t_list, axis=0)
         stacked_points = np.concatenate(p_list, axis=0)
@@ -680,7 +664,6 @@ class SemanticKittiDataset(PointCloudDataset):
         labels = np.concatenate(l_list, axis=0)
         if self.return_unknowns:
             unk_labels = np.concatenate(u_list, axis=0)
-        # ins_labels = np.concatenate(ins_l_list, axis=0) if not self.set in ['validation', 'test'] else np.concatenate(val_ins_labels_list, axis=0)
         ins_labels = np.concatenate(ins_l_list, axis=0)
         frame_inds = np.array(fi_list, dtype=np.int32)
         frame_centers = np.stack(p0_list, axis=0)
@@ -1113,7 +1096,7 @@ class SemanticKittiSampler(Sampler):
                 gen_indices = torch.randperm(self.dataset.potentials.shape[0])
 
             # Update potentials (Change the order for the next epoch)
-            
+
             if self.dataset.seqential_batch:
                 gen_indices  = torch.from_numpy(np.arange(self.min_scene_id, self.min_scene_id + self.N))
                 self.min_scene_id += self.N
@@ -1784,4 +1767,3 @@ def debug_class_w(dataset, loader):
                 s += '{:^6.1f}'.format(pp)
             print(s)
             i += 1
-

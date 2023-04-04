@@ -51,7 +51,7 @@ def main(FLAGS):
         else:
             learning_map_doc = doc['task_set_map'][task_set]['learning_map']
             inv_learning_map_doc = doc['task_set_map'][task_set]['learning_map_inv']
-    
+
     inv_learning_map = np.zeros((np.max([k for k in inv_learning_map_doc.keys()]) + 1), 
                                 dtype=np.int32)
     for k, v in inv_learning_map_doc.items():
@@ -84,32 +84,29 @@ def main(FLAGS):
         seq_save_dir = '{}/sequences/{:02d}/predictions/'.format(save_dir, sequence)
         if not os.path.exists(seq_save_dir):
             os.makedirs(seq_save_dir)
-        
+
         idxs = np.array(len(point_names))
-        
         # Project the points w.r.t to the first frame
         pose0 = poses_seq[0]
 
         mot_tracker = GreedyTracker()
-        
         for idx, point_file in tqdm(enumerate(seq_point_names)):
-            
+
             # Load the semantic predictions
             sem_path = os.path.join(prediction_path, '{0:02d}_{1:06d}.npy'.format(sequence,idx))
             sem_labels = np.load(sem_path)
-            
+
             # Load the unknown instance predictions
             unknown_ins_path = os.path.join(prediction_path, '{0:02d}_{1:06d}_{2:s}.npy'.format(sequence, idx, inst_ext))
             unknown_ins_labels = np.load(unknown_ins_path)
-            
-            
+
             # Load /create the tracked unknown predictions
             unknown_track_path = os.path.join(save_dir, '{0:02d}_{1:06d}_t.npy'.format(sequence,idx))
             unknown_track_labels = unknown_ins_labels.copy()
-            
+
             # Load the points and project them to camera coordinates
             points = np.fromfile(point_file, dtype=np.float32).reshape([-1,4])
-            
+
             hpoints = np.hstack((points[:, :3], np.ones_like(points[:, :1])))
             new_points = np.sum(np.expand_dims(hpoints, 2) * poses_seq[idx].T, axis=1)
 
@@ -120,8 +117,7 @@ def main(FLAGS):
                 points = new_coords[:, :3]
             else:
                 points = new_points[:, :3]
-            
-            
+
             points = torch.from_numpy(points)
             point_indexes = torch.arange(len(points))
 
@@ -129,14 +125,12 @@ def main(FLAGS):
             unknown_inst = unknown_ins_labels[mask]
             unknown_points = points[mask]
             point_indexes_unknown = point_indexes[mask]
-            
-            
-            
+
             centers, center2points = [], {}
             for ins_id in np.unique(unknown_inst):
-                
+
                 ind = np.where(unknown_inst == ins_id)[0]
-                
+
                 # If we have N = 25 points or less then just drop those instances.
                 if unknown_points[ind].shape[0] < 50:
                     unknown_track_labels[point_indexes_unknown[ind]] = 0
@@ -144,19 +138,15 @@ def main(FLAGS):
 
                 # For valid instances remove outliers which are two times the distance from the median.
                 # Gives the valid points and corresponding indices
-#                 refined_unknown_points, mask_ind = remove_outliers(unknown_points[ind])
-#                 new_ind = ind[mask_ind]
-#                 outliers = np.setdiff1d(ind, new_ind)
                 
                 # Calculate the new median with refined points
-                #center = get_median_center_from_points(refined_unknown_points)
                 center = get_median_center_from_points(unknown_points[ind])
-                
+
                 # Create a dictionary of {center: corresponding points}
                 center = np.stack(center)
                 centers.append(center)
                 center2points[center.data.tobytes()] = point_indexes_unknown[ind]
-                
+
                 # Assign 0 to all outliers
                 # unknown_track_labels[outliers] = 0
             

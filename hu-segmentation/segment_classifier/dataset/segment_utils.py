@@ -10,11 +10,13 @@ class Segment():
         self.score = score
         self.label = label
 
+
 class TreeSegment():
     '''Tree of segments as nodes.'''
     def __init__(self, indices, score, label=None):
         self.child_segments = None
         self.curr_segment_data = Segment(indices, score, label)
+
 
 def load_vertex(file):
     '''Load the vertices from the velodyne files.'''
@@ -22,11 +24,13 @@ def load_vertex(file):
     frame_points = frame_points.reshape((-1, 4))
     return frame_points[:,:3]
 
+
 def load_paths(folder):
   paths = [os.path.join(dp, f) for dp, dn, fn in os.walk(
     os.path.expanduser(folder)) for f in fn]
   paths.sort()
   return np.array(paths)
+
 
 def evaluate_iou_based_objectness(pred_inds, pts_indexes_objects, gt_instance_indexes, gt_instance_ids, gt_semantic_labels):
     '''Scoring based on IoU with the GT instances.'''
@@ -39,7 +43,7 @@ def evaluate_iou_based_objectness(pred_inds, pts_indexes_objects, gt_instance_in
     gt_inst_ids = gt_instance_ids[gt_indices_local]
 
     unique_gt_ids, unique_gt_counts = np.unique(gt_inst_ids, return_counts = True)
-    
+
     ious, labels = [], []
     for idx, gt_ins in enumerate(unique_gt_ids):
         gt_ind = np.where(gt_inst_ids == gt_ins)
@@ -55,10 +59,11 @@ def evaluate_iou_based_objectness(pred_inds, pts_indexes_objects, gt_instance_in
     max_idx = np.argmax(ious)
     return ious[max_idx], labels[max_idx]
 
+
 def compute_hierarchical_tree(eps_list, points_3d, pts_indexes_objects, gt_instance_indexes, gt_instance_ids, gt_semantic_labels, original_indices= None):
     '''We compute segments from hierarchical tree and compute 
         the objectness scores to perform tree cut.'''
-    
+
     # If we are at the end of the hierarchical tree then return the empty node.
     if len(eps_list) == 0: return []
 

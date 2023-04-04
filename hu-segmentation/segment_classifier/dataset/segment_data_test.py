@@ -27,8 +27,6 @@ if __name__ == '__main__':
     for i, batch in tqdm(enumerate(train_loader)):
         class_counts[0] += (batch["gt_label"] == 0).sum()
         class_counts[1] += (batch["gt_label"] == 1).sum()
-        # if class_counts[1] > 0:
-            # import pdb; pdb.set_trace()
     end_time = time.time()
     print("Time taken:", end_time-start_time)
     print(class_counts)

@@ -156,24 +156,14 @@ def main(FLAGS):
                     unknown_track_labels[point_indexes_unknown[ind]] = 0
                     continue
 
-                # For valid instances remove outliers which are two times the distance from the median.
-                # Gives the valid points and corresponding indices
-                # refined_unknown_points, mask_ind = remove_outliers(unknown_points[ind])
-                # new_ind = ind[mask_ind]
-                # outliers = np.setdiff1d(ind, new_ind)
-                
                 # Calculate the new median with refined points
-                #center = get_median_center_from_points(refined_unknown_points)
                 center = get_median_center_from_points(unknown_points[ind])
-                
+
                 # Create a dictionary of {center: corresponding points}
                 center = np.stack(center)
                 centers.append(center)
                 center2points[center.data.tobytes()] = point_indexes_unknown[ind]
-                
-                # Assign 0 to all outliers
-                # unknown_track_labels[outliers] = 0
-            
+
             # If there are no unknown points then assign the ids as it is
             if len(centers) == 0:
                 unknown_ins_labels = unknown_ins_labels.astype(np.int32)
@@ -186,27 +176,27 @@ def main(FLAGS):
                 new_preds.tofile('{0:s}/{1:s}.label'.format(seq_save_dir, file_id))
                 continue
             centers = np.stack(centers)
-            
+
             # Update the tracker with the new centers
             start_time = time.time()
             trackers = mot_tracker.update(centers)
             cycle_time = time.time() - start_time
             total_time += cycle_time
-            
+
             # Get the tracklets and update the instance id for the corresponding points
             for (t_id, trk_idx) in enumerate(trackers):
                 if trackers[trk_idx][0] == math.inf:
                     continue
                 inds = center2points[trackers[trk_idx].data.tobytes()]
                 unknown_track_labels[inds] = trk_idx #t_id+1
-        
+
             unknown_track_labels = unknown_track_labels.astype(np.int32)
             new_preds = np.left_shift(unknown_track_labels, 16)
 
             sem_labels = sem_labels.astype(np.int32)
             inv_sem_labels = inv_learning_map[sem_labels]
             new_preds = np.bitwise_or(new_preds, inv_sem_labels)
-            
+
             new_preds.tofile('{0:s}/{1:s}.label'.format(seq_save_dir, file_id))
 
 

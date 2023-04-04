@@ -135,7 +135,7 @@ class Kitti360Dataset(PointCloudDataset):
                         self.unknown_label_to_names[k] = label_name
                         self.unknown_label_names.append(label_name)
                 self.unknown_label_names = np.array(self.unknown_label_names)
-        
+
         # Dict from labels to names
         self.label_to_names = {k: all_labels[v] for k, v in learning_map_inv.items()}
 
@@ -144,16 +144,16 @@ class Kitti360Dataset(PointCloudDataset):
 
         # List of classes ignored during training (can be empty)
         self.ignored_labels = np.sort([0])
-        
+
         # Update number of class and data task in configuration
         config.num_classes = self.num_classes
         config.dataset_task = self.dataset_task
-        
+
         # Parameters from config
         self.config = config
-        
+
         # Init variables
-        self.calibration = np.eye(4) # cam->velo transformation
+        self.calibration = np.eye(4)  # cam->velo transformation
         self.poses = []
         self.times = []
         self.all_inds = None
@@ -190,7 +190,7 @@ class Kitti360Dataset(PointCloudDataset):
             self.batch_num = config.val_batch_num
             self.max_in_p = config.max_val_points
             self.in_R = config.val_radius
-        
+
         # shared epoch indices and classes (in case we want class balanced sampler)
         if self.set == 'training':
             N = int(np.ceil(config.epoch_steps * self.batch_num * 1.1))
@@ -219,7 +219,6 @@ class Kitti360Dataset(PointCloudDataset):
         Return the length of data here
         """
         return len(self.frames)
-    
 
     def __getitem__(self, batch_i):
         """
@@ -231,11 +230,11 @@ class Kitti360Dataset(PointCloudDataset):
 
         # Initiate concatanation lists
         c_list = []
-        t_list = [] # times
+        t_list = []  # times
         p_list = []
         f_list = []
         l_list = []
-        u_list = [] # unknown labels
+        u_list = []  # unknown labels
         ins_l_list = []
         fi_list = []
         p0_list = []
@@ -264,7 +263,7 @@ class Kitti360Dataset(PointCloudDataset):
 
                 # Update epoch indice
                 self.epoch_i += 1
-            
+
             s_ind, f_ind = self.all_inds[ind]
 
             t += [time.time()]
@@ -347,18 +346,12 @@ class Kitti360Dataset(PointCloudDataset):
                     sem_labels[sem_labels == -1] = 0
                     sem_labels = self.learning_map[sem_labels]
 
-                    # mask instance labels for unknown class
-                    # if self.task_set in (0, 1):
-                    #     ins_labels[sem_labels == self.unknown_label] = 0
-
                     if self.return_unknowns:
                         unk_labels = frame_labels & 0xFFFF  # semantic label in lower half
 
                 # Apply pose (without np.dot to avoid multi-threading)
                 hpoints = np.hstack((points[:, :3], np.ones_like(points[:, :1])))
-                # new_points = hpoints.dot(pose.T)
                 new_points = np.sum(np.expand_dims(hpoints, 2) * pose.T, axis=1)
-                # new_points[:, 3:] = points[:, 3:]
 
                 # In case of validation, keep the original points in memory
                 if self.set in ['training', 'validation', 'test'] and f_inc == 0:
@@ -387,10 +380,8 @@ class Kitti360Dataset(PointCloudDataset):
                     # eliminate points which are not belong to any instance class for future frame
 
                     if self.config.sampling == 'objectness':
-                        # mask = ((sem_labels > 0) & (sem_labels < 9) & mask)
                         mask = ((sem_labels > 0) & (sem_labels < self.things) & mask)
                     elif self.config.sampling == 'importance':
-                        # n_points_to_sample = np.sum((sem_labels > 0) & (sem_labels < 9))
                         n_points_to_sample = np.sum((sem_labels > 0) & (sem_labels < self.things))
                         probs = (center_labels[:,0] + 0.1)
                         idxs = np.random.choice(np.arange(center_labels.shape[0]), n_points_to_sample, p=probs/np.sum(probs))
@@ -422,9 +413,8 @@ class Kitti360Dataset(PointCloudDataset):
                                 if counter > 5:
                                     break
                                 continue
-                        #eliminate points which are not belong to any instance class for future frame
+                        # eliminate points which are not belong to any instance class for future frame
                         if label_pred is not None:
-                            # mask = (( label_pred > 0) & (label_pred < 9) & mask)
                             mask = ((label_pred > 0) & (label_pred < self.things) & mask)
                     elif self.config.sampling == 'importance':
                         filename = '{:s}_{:07d}_c.npy'.format(self.sequences[s_ind], f_ind - f_inc)
@@ -473,18 +463,15 @@ class Kitti360Dataset(PointCloudDataset):
                 else:
                     # We have to project in the first frame coordinates
                     new_coords = new_points - pose0[:3, 3]
-                    # new_coords = new_coords.dot(pose0[:3, :3])
                     new_coords = np.sum(np.expand_dims(new_coords, 2) * pose0[:3, :3], axis=1)
                     new_coords = np.hstack((new_coords, points[rand_order, 3:]))
 
-                #center_labels = np.reshape(center_labels,(-1,1))
                 d_coords = new_coords.shape[1]
                 d_centers = center_labels.shape[1]
                 times = np.ones((center_labels.shape[0],1)) * f_inc
                 times = times.astype(np.float32)
                 new_coords = np.hstack((new_coords, center_labels))
                 new_coords = np.hstack((new_coords, times))
-                #labels = np.hstack((sem_labels, ins_labels))
                 # Increment merge count
 
                 if f_inc == 0 or (hasattr(self.config, 'stride') and f_inc % self.config.stride == 0):
@@ -652,7 +639,7 @@ class Kitti360Dataset(PointCloudDataset):
         stack_lengths = np.array([pp.shape[0] for pp in p_list], dtype=np.int32)
         scales = np.array(s_list, dtype=np.float32)
         rots = np.stack(R_list, axis=0)
-        
+
         if o_center_labels is not None:
             val_center_labels = np.concatenate(val_center_label_list, axis=0)
         else:
@@ -711,7 +698,7 @@ class Kitti360Dataset(PointCloudDataset):
         t += [time.time()]
 
         return [self.config.num_layers] + input_list
-        
+
     def load_calib_poses(self):
         """
         load calib poses and times.
@@ -745,7 +732,6 @@ class Kitti360Dataset(PointCloudDataset):
         frame_inds = np.hstack([np.arange(len(_), dtype=np.int32) for _ in self.frames])
         self.all_inds = np.vstack((seq_inds, frame_inds)).T
 
-
     def parse_timestamps(self, filename):
         """ read timestamps file from given filename
 
@@ -773,7 +759,6 @@ class Kitti360Dataset(PointCloudDataset):
                 timestamps.append(delta_t)
                 prev_t = t
         return timestamps
-
 
     def parse_poses(self, filename, calibration):
         """ read poses file with per-scan poses from given filename

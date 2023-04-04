@@ -12,6 +12,7 @@
 import argparse
 import glob
 import signal
+import os
 
 # Dataset
 from datasets.SemanticKitti import *
@@ -268,7 +269,6 @@ if __name__ == '__main__':
     # Prepare Data
     ##############
 
-
     print()
     print('Data Preparation')
     print('****************')
@@ -293,7 +293,7 @@ if __name__ == '__main__':
     config.val_radius = 51.
     config.task_set = args.task_set
     config.saving_path = args.saving_dir
-    
+
     seq_dir = os.path.join(data_dir, 'data_3d_raw_labels', 
                            '2013_05_28_drive_{:04d}_sync'.format(args.seq), 'labels')
     config.epoch_steps = len(glob.glob(seq_dir + '/*.label'))
@@ -312,9 +312,9 @@ if __name__ == '__main__':
                              batch_size=1,
                              sampler=test_sampler,
                              collate_fn=SemanticKittiCollate,
-                             num_workers=0, # config.input_threads,
+                             num_workers=0,  # config.input_threads,
                              pin_memory=True)
-    
+
     # Calibrate max_in_point value
     test_sampler.calib_max_in(config, test_loader, verbose=True)
 

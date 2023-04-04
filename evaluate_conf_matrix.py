@@ -77,15 +77,6 @@ if __name__ == '__main__':
     ############################
     # Initialize the environment
     ############################
-
-    # Set which gpu is going to be used
-    # GPU_ID = '5'
-    # # if torch.cuda.device_count() > 1:
-    # #     GPU_ID = '0, 1'
-
-    # # Set GPU visible device
-    # os.environ['CUDA_VISIBLE_DEVICES'] = GPU_ID
-
     args = parse_args()
 
     ###############
@@ -112,8 +103,6 @@ if __name__ == '__main__':
     ##############
     # Prepare Data
     ##############
-
-
     print()
     print('Data Preparation')
     print('****************')
@@ -134,11 +123,11 @@ if __name__ == '__main__':
     config.stride = 1
     config.sampling = 'importance'
     config.decay_sampling = 'None'
-    
+
     if args.semantic_kitti:
         config.validation_size = 4071
         dataset_name = 'semantic_kitti'
-    
+
     if args.kitti360:
         data_dir = 'data/Kitti360'
         seq_dir = os.path.join(data_dir, 'data_3d_raw_labels', 
@@ -149,8 +138,8 @@ if __name__ == '__main__':
         dataset_name = 'kitti360'
 
     config.task_set = args.task_set
-    
-    if config.task_set in [0,1,2]:
+
+    if config.task_set in [0, 1, 2]:
         return_unknowns = True
     else:
         return_unknowns = False
@@ -180,7 +169,6 @@ if __name__ == '__main__':
                             num_workers=config.input_threads,
                             pin_memory=True)
 
-
     # Calibrate max_in_point value
     test_sampler.calib_max_in(config, test_loader, verbose=True)
 
@@ -194,7 +182,7 @@ if __name__ == '__main__':
     t1 = time.time()
 
     checkpoint = torch.load(chosen_chkp) 
-    
+
     net = KPFCNN(config, test_dataset.label_values, test_dataset.ignored_labels)
     net.load_state_dict(checkpoint['model_state_dict'])
     net.eval()
@@ -204,7 +192,7 @@ if __name__ == '__main__':
 
     print('\nStart forward pass')
     print('**************')
-    
+
     softmax = torch.nn.Softmax(1)
     predictions = []
     true_mapped_labels = []
@@ -216,7 +204,7 @@ if __name__ == '__main__':
         if torch.cuda.device_count() >= 1:
             net.to(torch.cuda.current_device())
             batch.to(torch.cuda.current_device())
-        
+
         with torch.no_grad():
             outputs, centers_output, var_output, embedding = net(batch, config)
             probs = softmax(outputs).cpu().detach().numpy()
@@ -273,30 +261,30 @@ if __name__ == '__main__':
         k = 10
     else:
         k = 19
-        
+
     if args.task_set == -1:
         conf_matrix_1 = sklearn.metrics.confusion_matrix(
-            np.concatenate(true_mapped_labels), 
-            np.concatenate(predictions), 
+            np.concatenate(true_mapped_labels),
+            np.concatenate(predictions),
             labels=val_label_values)
 
     else:
         conf_matrix_1 = sklearn.metrics.confusion_matrix(
-            np.concatenate(true_mapped_labels), 
-            np.concatenate(predictions), 
+            np.concatenate(true_mapped_labels),
+            np.concatenate(predictions),
             labels=val_label_values)
-        
+
         conf_matrix_2 = confusion_openset(
-            np.concatenate(true_mapped_labels), 
-            np.concatenate(predictions), 
-            np.concatenate(true_unmapped_labels), 
-            val_label_values, 
+            np.concatenate(true_mapped_labels),
+            np.concatenate(predictions),
+            np.concatenate(true_unmapped_labels),
+            val_label_values,
             unknown_label_values)
 
     # Remove ignored labels from confusions
     conf_matrix_1 = np.delete(conf_matrix_1, 0, axis=0)
     conf_matrix_1 = np.delete(conf_matrix_1, 0, axis=1)
-    
+
     # Balance with real validation proportions
     if args.task_set == -1:
         conf_matrix_1 = conf_matrix_1.T
@@ -304,7 +292,7 @@ if __name__ == '__main__':
         conf_matrix_1 /= np.expand_dims((np.sum(conf_matrix_1, axis=1) + 1e-6), 0)
         y_labels = np.array(test_dataset.label_names)[1:]
         x_labels = y_labels
-        
+
         plt.figure(figsize = (30,10))
         sns.heatmap(conf_matrix_1, xticklabels=x_labels, yticklabels=y_labels, cmap='Blues', robust=True, square=True)
         plt.xlabel('Groundtruth Class')
@@ -312,16 +300,16 @@ if __name__ == '__main__':
         plt.subplots_adjust(bottom=0.15)
         plt.show()
         plt.savefig('results/updated_confusion_matrix_ts{}_{}_balanced.png'.format(args.task_set, dataset_name))
-    
+
     else:
         # Unknown to known confusion
         conf_matrix_1 = conf_matrix_1.T
         unk_to_known_conf = np.zeros((num_classes - 1, num_classes - 2 + num_unknown_classes - 1))
-        
+
         unk_to_known_conf[:, num_classes - 2:] = conf_matrix_2
         unk_to_known_conf[:, :num_classes - 2] = conf_matrix_1[:, :num_classes-2]
         unk_to_known_conf /= np.expand_dims(np.sum(unk_to_known_conf, axis = 0)+ 1e-6, 0)
-        
+
         unk_to_known_y_labels = np.array(test_dataset.label_names)[1:-1]
         unk_to_known_x_labels = np.concatenate([unk_to_known_y_labels, test_dataset.unknown_label_names[:-1]])
         unk_to_known_y_labels = np.array(test_dataset.label_names)[1:]
@@ -333,13 +321,13 @@ if __name__ == '__main__':
         plt.subplots_adjust(bottom=0.15)
         plt.show()
         plt.savefig('results/updated_extended_confusion_matrix_ts{}_{}_balanced.png'.format(args.task_set, dataset_name))
-        
+
         # Known to Unknown confusion
         conf_matrix = conf_matrix_1.astype(np.float64)
         conf_matrix /= np.expand_dims(np.sum(conf_matrix, axis=0)+ 1e-6, 0)
         y_labels = np.array(test_dataset.label_names)[1:]
         x_labels = y_labels
-        
+
         plt.figure(figsize = (20,10))
         sns.heatmap(conf_matrix, xticklabels=x_labels, yticklabels=y_labels, cmap='Blues', robust=True, square=True)
         plt.xlabel('Groundtruth Class')
@@ -347,4 +335,3 @@ if __name__ == '__main__':
         plt.subplots_adjust(bottom=0.15)
         plt.show()
         plt.savefig('results/updated_normal_confusion_matrix_ts{}_{}_balanced.png'.format(args.task_set, dataset_name))
-    
