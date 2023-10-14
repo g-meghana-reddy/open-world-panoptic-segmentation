@@ -20,8 +20,9 @@ def weighted_mse_loss(output, target, weights):
     loss = out.mean(0)
     return loss
 
+
 def pdf_normal(x, mean, var):
-    eps = torch.ones_like(var,requires_grad=True, device=x.device) * 1e-5
+    eps = torch.ones_like(var, requires_grad=True, device=x.device) * 1e-5
     var_eps = var + eps
     var_seq = var_eps.squeeze()
     inv_var = torch.diag(1/var_seq)
@@ -33,6 +34,7 @@ def pdf_normal(x, mean, var):
     p_e = torch.exp(p)
 
     return p_e
+
 
 def new_pdf_normal(x, mean, var):
     """
@@ -53,8 +55,8 @@ def new_pdf_normal(x, mean, var):
     probs = torch.exp(e * -0.5)
     probs = torch.sum(probs, 1) / torch.sum(var_eps)
 
-
     return probs
+
 
 def instance_half_loss(embeddings, ins_labels):
     """
@@ -82,7 +84,8 @@ def instance_half_loss(embeddings, ins_labels):
             if torch.isnan(ins_half_loss):
                 continue
             loss = loss + ins_half_loss
-    return  loss
+    return loss
+
 
 def iou_instance_loss(centers_p, embeddings, variances, ins_labels, points=None, times=None):
     """
@@ -102,7 +105,8 @@ def iou_instance_loss(centers_p, embeddings, variances, ins_labels, points=None,
 
     if variances.shape[1] - embeddings.shape[1] > 4:
         global_emb, _ = torch.max(embeddings, 0, keepdim=True)
-        embeddings = torch.cat((embeddings, global_emb.repeat(embeddings.shape[0],1)),1)
+        embeddings = torch.cat(
+            (embeddings, global_emb.repeat(embeddings.shape[0], 1)), 1)
 
     if variances.shape[1] - embeddings.shape[1] == 3:
         embeddings = torch.cat((embeddings, points[0]), 1)
@@ -130,11 +134,14 @@ def iou_instance_loss(centers_p, embeddings, variances, ins_labels, points=None,
 
             probs = new_pdf_normal(embeddings, mean, var)
 
-            ratio = torch.sum(ins_labels == 0)/(torch.sum(ins_labels == instance)*1.0+ torch.sum(probs > 0.5))
-            weights = ((ins_labels == instance) | (probs >0.5)) * ratio + (ins_labels >= 0) * 1 #new loss
+            ratio = torch.sum(
+                ins_labels == 0)/(torch.sum(ins_labels == instance)*1.0 + torch.sum(probs > 0.5))
+            weights = ((ins_labels == instance) | (probs > 0.5)) * \
+                ratio + (ins_labels >= 0) * 1  # new loss
             loss = loss + weighted_mse_loss(probs, labels, weights)
 
     return loss
+
 
 def variance_smoothness_loss(variances, ins_labels):
     """
@@ -162,6 +169,7 @@ def variance_smoothness_loss(variances, ins_labels):
             print("nan")
     return loss
 
+
 def variance_l2_loss(variances, ins_labels):
     instances = torch.unique(ins_labels)
     loss = torch.tensor(0.0).to(variances.device)
@@ -176,14 +184,17 @@ def variance_l2_loss(variances, ins_labels):
         print("nan")
     return loss
 
+
 class FocalLoss(nn.Module):
 
     def __init__(self, gamma=0, alpha=None, size_average=True):
         super(FocalLoss, self).__init__()
         self.gamma = gamma
         self.alpha = alpha
-        if isinstance(alpha, (float, int)): self.alpha = torch.Tensor([alpha, 1 - alpha])
-        if isinstance(alpha, list): self.alpha = torch.Tensor(alpha)
+        if isinstance(alpha, (float, int)):
+            self.alpha = torch.Tensor([alpha, 1 - alpha])
+        if isinstance(alpha, list):
+            self.alpha = torch.Tensor(alpha)
         self.size_average = size_average
 
     def forward(self, output, target):
@@ -252,15 +263,18 @@ def iou(preds, labels, C, EMPTY=1., ignore=None, per_image=False):
     for pred, label in zip(preds, labels):
         iou = []
         for i in range(C):
-            if i != ignore:  # The ignored label is sometimes among predicted classes (ENet - CityScapes)
+            # The ignored label is sometimes among predicted classes (ENet - CityScapes)
+            if i != ignore:
                 intersection = ((label == i) & (pred == i)).sum()
-                union = ((label == i) | ((pred == i) & (label != ignore))).sum()
+                union = ((label == i) | (
+                    (pred == i) & (label != ignore))).sum()
                 if not union:
                     iou.append(EMPTY)
                 else:
                     iou.append(float(intersection) / float(union))
         ious.append(iou)
-    ious = [mean(iou) for iou in zip(*ious)]  # mean accross images if per_image
+    # mean accross images if per_image
+    ious = [mean(iou) for iou in zip(*ious)]
     return 100 * np.array(ious)
 
 
@@ -279,7 +293,8 @@ def lovasz_hinge(logits, labels, per_image=True, ignore=None):
         loss = mean(lovasz_hinge_flat(*flatten_binary_scores(log.unsqueeze(0), lab.unsqueeze(0), ignore))
                     for log, lab in zip(logits, labels))
     else:
-        loss = lovasz_hinge_flat(*flatten_binary_scores(logits, labels, ignore))
+        loss = lovasz_hinge_flat(
+            *flatten_binary_scores(logits, labels, ignore))
     return loss
 
 
@@ -357,7 +372,8 @@ def lovasz_softmax(probas, labels, classes='present', per_image=False, ignore=No
         loss = mean(lovasz_softmax_flat(*flatten_probas(prob.unsqueeze(0), lab.unsqueeze(0), ignore), classes=classes)
                     for prob, lab in zip(probas, labels))
     else:
-        loss = lovasz_softmax_flat(*flatten_probas(probas, labels, ignore), classes=classes)
+        loss = lovasz_softmax_flat(
+            *flatten_probas(probas, labels, ignore), classes=classes)
     return loss
 
 
@@ -388,7 +404,8 @@ def lovasz_softmax_flat(probas, labels, classes='present'):
         errors_sorted, perm = torch.sort(errors, 0, descending=True)
         perm = perm.data
         fg_sorted = fg[perm]
-        losses.append(torch.dot(errors_sorted, Variable(lovasz_grad(fg_sorted))))
+        losses.append(
+            torch.dot(errors_sorted, Variable(lovasz_grad(fg_sorted))))
     return mean(losses)
 
 
@@ -401,7 +418,8 @@ def flatten_probas(probas, labels, ignore=None):
         B, H, W = probas.size()
         probas = probas.view(B, 1, H, W)
     B, C, H, W = probas.size()
-    probas = probas.permute(0, 2, 3, 1).contiguous().view(-1, C)  # B * H * W, C = P, C
+    probas = probas.permute(0, 2, 3, 1).contiguous(
+    ).view(-1, C)  # B * H * W, C = P, C
     labels = labels.view(-1)
     if ignore is None:
         return probas, labels

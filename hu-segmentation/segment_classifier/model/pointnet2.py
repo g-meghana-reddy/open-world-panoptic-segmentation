@@ -77,7 +77,7 @@ class PointNet2Classification(nn.Module):
             Number of channels associated with features (excludes x,y,z)
         num_classes : int
             Number of categories for classification
-    
+
     NOTE: Batch size cannot be 1 for this network since we use BN: https://discuss.pytorch.org/t/error-expected-more-than-1-value-per-channel-when-training/26274/2
     PointRCNN does not use BN so it's all good
     """
@@ -102,8 +102,6 @@ class PointNet2Classification(nn.Module):
         self.rcnn_input_channel = xyz_dim + channel_in
         self.xyz_up_layer = pt_utils.SharedMLP([self.rcnn_input_channel] + XYZ_UP_LAYER,
                                                 bn=USE_BN)
-        # c_out = XYZ_UP_LAYER[-1]
-        # self.merge_down_layer = pt_utils.SharedMLP([c_out * 2, c_out], bn=USE_BN)
 
         # encode features
         channel_in = XYZ_UP_LAYER[-1]
@@ -132,7 +130,7 @@ class PointNet2Classification(nn.Module):
             self.sem_layer = self._create_head(channel_in, cls_channel, SEM_FC)
 
         self.init_weights(weight_init='xavier')
-    
+
     def _create_head(self, in_channels, cls_channels, num_layers=CLS_FC):
         cls_layers = []
         pre_channel = in_channels
@@ -179,21 +177,11 @@ class PointNet2Classification(nn.Module):
         Params:
             pointcloud : torch.Tensor (B, N, 3 + input_channels)
                 Input point cloud of format (x, y, z, features)
-        
+
         Returns:
             Class label for each point cloud
         """
         xyz, features = self._break_up_pc(pointcloud)
-
-        # xyz_input = xyz[..., 0:self.rcnn_input_channel].transpose(1, 2).unsqueeze(dim=3)
-        # xyz_feature = self.xyz_up_layer(xyz_input)
-
-        # rpn_feature = xyz[..., self.rcnn_input_channel:].transpose(1, 2).unsqueeze(dim=3)
-
-        # merged_feature = torch.cat((xyz_feature, rpn_feature), dim=1)
-        # merged_feature = self.merge_down_layer(merged_feature)
-        # # l_xyz, l_features = [xyz], [merged_feature.squeeze(dim=3)]
-        # xyz, features = xyz, merged_feature.squeeze(dim=3)
 
         if self.config.USE_POS_ENCODING:
             xyz_pos_features = self.pos_encoding_layer(xyz)
@@ -203,7 +191,7 @@ class PointNet2Classification(nn.Module):
             xyz_input = xyz
         else:
             xyz_input = torch.cat((xyz, features.transpose(1, 2)), dim=-1)
-            
+
         xyz_feature = self.xyz_up_layer(xyz_input.transpose(1, 2).unsqueeze(dim=3))
         xyz, features = xyz, xyz_feature.squeeze(dim=3)
 
@@ -245,15 +233,14 @@ class PointNet2Classification(nn.Module):
             # backpropagate only for valid segments
             if train:
                 inds = torch.where(batch['gt_label'] == 1)
-                # inds = torch.where(pred_obj_cls.sigmoid() >= self.config.FG_THRESH)
                 pred_sem_cls = pred_sem_cls[inds] 
                 segment_label = segment_label[inds]
             else:
                 if self.config.USE_SEG_CLASSIFIER:
                     inds = torch.where(pred_obj_cls.sigmoid() >= self.config.FG_THRESH)
-                    pred_sem_cls = pred_sem_cls[inds] 
+                    pred_sem_cls = pred_sem_cls[inds]
                     segment_label = segment_label[inds]
-            
+
             if not self.config.USE_SEM_WEIGHTS:
                 sem_weights = None
 
@@ -263,7 +250,7 @@ class PointNet2Classification(nn.Module):
                     sem_loss = sem_loss_func(pred_sem_cls, segment_label, reduction="mean")
                 else:
                     sem_loss = sem_loss_func(pred_sem_cls, segment_label, weight=sem_weights)
-                
+
         return cls_loss + self.config.PRETRAIN * 0.1 * sem_loss
 
     def focal_loss(

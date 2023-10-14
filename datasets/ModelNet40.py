@@ -134,16 +134,19 @@ class ModelNet40Dataset(PointCloudDataset):
                 self.epoch_n = self.num_models
         else:
             self.num_models = 2468
-            self.epoch_n = min(self.num_models, config.validation_size * config.batch_num)
+            self.epoch_n = min(
+                self.num_models, config.validation_size * config.batch_num)
 
         #############
         # Load models
         #############
 
         if 0 < self.config.first_subsampling_dl <= 0.01:
-            raise ValueError('subsampling_parameter too low (should be over 1 cm')
+            raise ValueError(
+                'subsampling_parameter too low (should be over 1 cm')
 
-        self.input_points, self.input_normals, self.input_labels = self.load_subsampled_clouds(orient_correction)
+        self.input_points, self.input_normals, self.input_labels = self.load_subsampled_clouds(
+            orient_correction)
 
         return
 
@@ -178,7 +181,8 @@ class ModelNet40Dataset(PointCloudDataset):
             label = self.label_to_idx[self.input_labels[p_i]]
 
             # Data augmentation
-            points, normals, scale, R = self.augmentation_transform(points, normals)
+            points, normals, scale, R = self.augmentation_transform(
+                points, normals)
 
             # Stack batch
             tp_list += [points]
@@ -198,18 +202,21 @@ class ModelNet40Dataset(PointCloudDataset):
         stacked_normals = np.concatenate(tn_list, axis=0)
         labels = np.array(tl_list, dtype=np.int64)
         model_inds = np.array(ti_list, dtype=np.int32)
-        stack_lengths = np.array([tp.shape[0] for tp in tp_list], dtype=np.int32)
+        stack_lengths = np.array([tp.shape[0]
+                                 for tp in tp_list], dtype=np.int32)
         scales = np.array(s_list, dtype=np.float32)
         rots = np.stack(R_list, axis=0)
 
         # Input features
-        stacked_features = np.ones_like(stacked_points[:, :1], dtype=np.float32)
+        stacked_features = np.ones_like(
+            stacked_points[:, :1], dtype=np.float32)
         if self.config.in_features_dim == 1:
             pass
         elif self.config.in_features_dim == 4:
             stacked_features = np.hstack((stacked_features, stacked_normals))
         else:
-            raise ValueError('Only accepted input dimensions are 1, 4 and 7 (without and with XYZ)')
+            raise ValueError(
+                'Only accepted input dimensions are 1, 4 and 7 (without and with XYZ)')
 
         #######################
         # Create network inputs
@@ -236,12 +243,14 @@ class ModelNet40Dataset(PointCloudDataset):
 
         # Load wanted points if possible
         if self.train:
-            split ='training'
+            split = 'training'
         else:
             split = 'test'
 
-        print('\nLoading {:s} points subsampled at {:.3f}'.format(split, self.config.first_subsampling_dl))
-        filename = join(self.path, '{:s}_{:.3f}_record.pkl'.format(split, self.config.first_subsampling_dl))
+        print('\nLoading {:s} points subsampled at {:.3f}'.format(
+            split, self.config.first_subsampling_dl))
+        filename = join(self.path, '{:s}_{:.3f}_record.pkl'.format(
+            split, self.config.first_subsampling_dl))
 
         if exists(filename):
             with open(filename, 'rb') as file:
@@ -252,9 +261,11 @@ class ModelNet40Dataset(PointCloudDataset):
 
             # Collect training file names
             if self.train:
-                names = np.loadtxt(join(self.path, 'modelnet40_train.txt'), dtype=np.str)
+                names = np.loadtxt(
+                    join(self.path, 'modelnet40_train.txt'), dtype=np.str)
             else:
-                names = np.loadtxt(join(self.path, 'modelnet40_test.txt'), dtype=np.str)
+                names = np.loadtxt(
+                    join(self.path, 'modelnet40_test.txt'), dtype=np.str)
 
             # Initialize containers
             input_points = []
@@ -283,7 +294,8 @@ class ModelNet40Dataset(PointCloudDataset):
                     normals = data[:, 3:]
 
                 print('', end='\r')
-                print(fmt_str.format('#' * ((i * progress_n) // N), 100 * i / N), end='', flush=True)
+                print(fmt_str.format('#' * ((i * progress_n) // N),
+                      100 * i / N), end='', flush=True)
 
                 # Add to list
                 input_points += [points]
@@ -295,7 +307,8 @@ class ModelNet40Dataset(PointCloudDataset):
 
             # Get labels
             label_names = ['_'.join(name.split('_')[:-1]) for name in names]
-            input_labels = np.array([self.name_to_label[name] for name in label_names])
+            input_labels = np.array([self.name_to_label[name]
+                                    for name in label_names])
 
             # Save for later use
             with open(filename, 'wb') as file:
@@ -305,7 +318,8 @@ class ModelNet40Dataset(PointCloudDataset):
 
         lengths = [p.shape[0] for p in input_points]
         sizes = [l * 4 * 6 for l in lengths]
-        print('{:.1f} MB loaded in {:.1f}s'.format(np.sum(sizes) * 1e-6, time.time() - t0))
+        print('{:.1f} MB loaded in {:.1f}s'.format(
+            np.sum(sizes) * 1e-6, time.time() - t0))
 
         if orient_correction:
             input_points = [pp[:, [0, 2, 1]] for pp in input_points]
@@ -336,7 +350,8 @@ class ModelNet40Sampler(Sampler):
 
         # Create potentials
         if self.use_potential:
-            self.potentials = np.random.rand(len(dataset.input_labels)) * 0.1 + 0.1
+            self.potentials = np.random.rand(
+                len(dataset.input_labels)) * 0.1 + 0.1
         else:
             self.potentials = None
 
@@ -362,14 +377,17 @@ class ModelNet40Sampler(Sampler):
                 for i, l in enumerate(self.dataset.label_values):
 
                     # Get the potentials of the objects of this class
-                    label_inds = np.where(np.equal(self.dataset.input_labels, l))[0]
+                    label_inds = np.where(
+                        np.equal(self.dataset.input_labels, l))[0]
                     class_potentials = self.potentials[label_inds]
 
                     # Get the indices to generate thanks to potentials
                     if pick_n < class_potentials.shape[0]:
-                        pick_indices = np.argpartition(class_potentials, pick_n)[:pick_n]
+                        pick_indices = np.argpartition(
+                            class_potentials, pick_n)[:pick_n]
                     else:
-                        pick_indices = np.random.permutation(class_potentials.shape[0])
+                        pick_indices = np.random.permutation(
+                            class_potentials.shape[0])
                     class_indices = label_inds[pick_indices]
                     gen_indices.append(class_indices)
 
@@ -380,26 +398,33 @@ class ModelNet40Sampler(Sampler):
 
                 # Get indices with the minimum potential
                 if self.dataset.epoch_n < self.potentials.shape[0]:
-                    gen_indices = np.argpartition(self.potentials, self.dataset.epoch_n)[:self.dataset.epoch_n]
+                    gen_indices = np.argpartition(self.potentials, self.dataset.epoch_n)[
+                        :self.dataset.epoch_n]
                 else:
-                    gen_indices = np.random.permutation(self.potentials.shape[0])
+                    gen_indices = np.random.permutation(
+                        self.potentials.shape[0])
                 gen_indices = np.random.permutation(gen_indices)
 
             # Update potentials (Change the order for the next epoch)
-            self.potentials[gen_indices] = np.ceil(self.potentials[gen_indices])
-            self.potentials[gen_indices] += np.random.rand(gen_indices.shape[0]) * 0.1 + 0.1
+            self.potentials[gen_indices] = np.ceil(
+                self.potentials[gen_indices])
+            self.potentials[gen_indices] += np.random.rand(
+                gen_indices.shape[0]) * 0.1 + 0.1
 
         else:
             if self.balance_labels:
                 pick_n = self.dataset.epoch_n // self.dataset.num_classes + 1
                 gen_indices = []
                 for l in self.dataset.label_values:
-                    label_inds = np.where(np.equal(self.dataset.input_labels, l))[0]
-                    rand_inds = np.random.choice(label_inds, size=pick_n, replace=True)
+                    label_inds = np.where(
+                        np.equal(self.dataset.input_labels, l))[0]
+                    rand_inds = np.random.choice(
+                        label_inds, size=pick_n, replace=True)
                     gen_indices += [rand_inds]
                 gen_indices = np.random.permutation(np.hstack(gen_indices))
             else:
-                gen_indices = np.random.permutation(self.dataset.num_models)[:self.dataset.epoch_n]
+                gen_indices = np.random.permutation(self.dataset.num_models)[
+                    :self.dataset.epoch_n]
 
         ################
         # Generator loop
@@ -531,7 +556,8 @@ class ModelNet40Sampler(Sampler):
                 else:
                     color = bcolors.FAIL
                     v = '?'
-                print('{:}\"{:s}\": {:s}{:}'.format(color, key, v, bcolors.ENDC))
+                print('{:}\"{:s}\": {:s}{:}'.format(
+                    color, key, v, bcolors.ENDC))
 
         if redo:
 
@@ -540,10 +566,12 @@ class ModelNet40Sampler(Sampler):
             ############################
 
             # From config parameter, compute higher bound of neighbors number in a neighborhood
-            hist_n = int(np.ceil(4 / 3 * np.pi * (self.dataset.config.conv_radius + 1) ** 3))
+            hist_n = int(
+                np.ceil(4 / 3 * np.pi * (self.dataset.config.conv_radius + 1) ** 3))
 
             # Histogram of neighborhood sizes
-            neighb_hists = np.zeros((self.dataset.config.num_layers, hist_n), dtype=np.int32)
+            neighb_hists = np.zeros(
+                (self.dataset.config.num_layers, hist_n), dtype=np.int32)
 
             ########################
             # Batch calib parameters
@@ -575,8 +603,10 @@ class ModelNet40Sampler(Sampler):
                 for batch_i, batch in enumerate(dataloader):
 
                     # Update neighborhood histogram
-                    counts = [np.sum(neighb_mat.numpy() < neighb_mat.shape[0], axis=1) for neighb_mat in batch.neighbors]
-                    hists = [np.bincount(c, minlength=hist_n)[:hist_n] for c in counts]
+                    counts = [np.sum(neighb_mat.numpy() < neighb_mat.shape[0], axis=1)
+                              for neighb_mat in batch.neighbors]
+                    hists = [np.bincount(c, minlength=hist_n)[
+                        :hist_n] for c in counts]
                     neighb_hists += np.vstack(hists)
 
                     # batch length
@@ -622,7 +652,8 @@ class ModelNet40Sampler(Sampler):
 
             # Use collected neighbor histogram to get neighbors limit
             cumsum = np.cumsum(neighb_hists.T, axis=0)
-            percentiles = np.sum(cumsum < (untouched_ratio * cumsum[hist_n - 1, :]), axis=0)
+            percentiles = np.sum(
+                cumsum < (untouched_ratio * cumsum[hist_n - 1, :]), axis=0)
             self.dataset.neighborhood_limits = percentiles
 
             if verbose:
@@ -645,8 +676,9 @@ class ModelNet40Sampler(Sampler):
                         else:
                             color = bcolors.OKGREEN
                         line0 += '|{:}{:10d}{:}  '.format(color,
-                                                         neighb_hists[layer, neighb_size],
-                                                         bcolors.ENDC)
+                                                          neighb_hists[layer,
+                                                                       neighb_size],
+                                                          bcolors.ENDC)
 
                     print(line0)
 
@@ -663,7 +695,8 @@ class ModelNet40Sampler(Sampler):
 
             # Save neighb_limit dictionary
             for layer_ind in range(self.dataset.config.num_layers):
-                dl = self.dataset.config.first_subsampling_dl * (2 ** layer_ind)
+                dl = self.dataset.config.first_subsampling_dl * \
+                    (2 ** layer_ind)
                 if self.dataset.config.deform_layers[layer_ind]:
                     r = dl * self.dataset.config.deform_radius
                 else:
@@ -672,7 +705,6 @@ class ModelNet40Sampler(Sampler):
                 neighb_lim_dict[key] = self.dataset.neighborhood_limits[layer_ind]
             with open(neighb_lim_file, 'wb') as file:
                 pickle.dump(neighb_lim_dict, file)
-
 
         print('Calibration done in {:.1f}s\n'.format(time.time() - t0))
         return
@@ -691,13 +723,17 @@ class ModelNet40CustomBatch:
 
         # Extract input tensors from the list of numpy array
         ind = 0
-        self.points = [torch.from_numpy(nparray) for nparray in input_list[ind:ind+L]]
+        self.points = [torch.from_numpy(nparray)
+                       for nparray in input_list[ind:ind+L]]
         ind += L
-        self.neighbors = [torch.from_numpy(nparray) for nparray in input_list[ind:ind+L]]
+        self.neighbors = [torch.from_numpy(nparray)
+                          for nparray in input_list[ind:ind+L]]
         ind += L
-        self.pools = [torch.from_numpy(nparray) for nparray in input_list[ind:ind+L]]
+        self.pools = [torch.from_numpy(nparray)
+                      for nparray in input_list[ind:ind+L]]
         ind += L
-        self.lengths = [torch.from_numpy(nparray) for nparray in input_list[ind:ind+L]]
+        self.lengths = [torch.from_numpy(nparray)
+                        for nparray in input_list[ind:ind+L]]
         ind += L
         self.features = torch.from_numpy(input_list[ind])
         ind += 1
@@ -717,7 +753,8 @@ class ModelNet40CustomBatch:
         """
 
         self.points = [in_tensor.pin_memory() for in_tensor in self.points]
-        self.neighbors = [in_tensor.pin_memory() for in_tensor in self.neighbors]
+        self.neighbors = [in_tensor.pin_memory()
+                          for in_tensor in self.neighbors]
         self.pools = [in_tensor.pin_memory() for in_tensor in self.pools]
         self.lengths = [in_tensor.pin_memory() for in_tensor in self.lengths]
         self.features = self.features.pin_memory()
@@ -789,7 +826,8 @@ class ModelNet40CustomBatch:
                         elem[elem >= 0] -= i0
                     elif element_name == 'pools':
                         elem[elem >= self.points[layer_i].shape[0]] = -1
-                        elem[elem >= 0] -= torch.sum(self.lengths[layer_i][:b_i])
+                        elem[elem >=
+                             0] -= torch.sum(self.lengths[layer_i][:b_i])
                     i0 += length
 
                     if to_numpy:
@@ -823,9 +861,10 @@ def debug_sampling(dataset, sampler, loader):
         for batch_i, (points, normals, labels, indices, in_sizes) in enumerate(loader):
             # print(batch_i, tuple(points.shape),  tuple(normals.shape), labels, indices, in_sizes)
 
-            label_sum += np.bincount(labels.numpy(), minlength=dataset.num_classes)
+            label_sum += np.bincount(labels.numpy(),
+                                     minlength=dataset.num_classes)
             print(label_sum)
-            #print(sampler.potentials[:6])
+            # print(sampler.potentials[:6])
 
             print('******************')
         print('*******************************************')
@@ -859,7 +898,8 @@ def debug_timing(dataset, sampler, loader):
             t += [time.time()]
 
             # Average timing
-            mean_dt = 0.9 * mean_dt + 0.1 * (np.array(t[1:]) - np.array(t[:-1]))
+            mean_dt = 0.9 * mean_dt + 0.1 * \
+                (np.array(t[1:]) - np.array(t[:-1]))
 
             # Console display (only one per second)
             if (t[-1] - last_display) > -1.0:
@@ -877,7 +917,6 @@ def debug_timing(dataset, sampler, loader):
 
 
 def debug_show_clouds(dataset, sampler, loader):
-
 
     for epoch in range(10):
 
@@ -952,7 +991,8 @@ def debug_batch_and_neighbors_calib(dataset, sampler, loader):
             t += [time.time()]
 
             # Average timing
-            mean_dt = 0.9 * mean_dt + 0.1 * (np.array(t[1:]) - np.array(t[:-1]))
+            mean_dt = 0.9 * mean_dt + 0.1 * \
+                (np.array(t[1:]) - np.array(t[:-1]))
 
             # Console display (only one per second)
             if (t[-1] - last_display) > 1.0:
@@ -992,4 +1032,3 @@ class ModelNet40WorkerInitDebug:
         # configure the dataset to only process the split workload
 
         return
-

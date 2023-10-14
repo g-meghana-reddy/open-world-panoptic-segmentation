@@ -479,9 +479,6 @@ if __name__ == '__main__':
         plt.savefig('confusion_matrix_ts{}_balanced.png'.format(args.task_set))
     
     else:
-        
-        # Meghs
-        
         # Unknown to known confusion
         conf_matrix_1 = conf_matrix_1.T
         unk_to_known_conf = np.zeros(conf_matrix_2.shape)
@@ -513,6 +510,4 @@ if __name__ == '__main__':
         plt.subplots_adjust(bottom=0.15)
         plt.show()
         plt.savefig('normal_confusion_matrix_ts{}_balanced.png'.format(args.task_set))
-
-        # Meghs
     

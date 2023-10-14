@@ -50,10 +50,14 @@ def p2p_fitting_regularizer(net):
 
             # Point should not be close to each other
             for i in range(net.K):
-                other_KP = torch.cat([KP_locs[:, :i, :], KP_locs[:, i + 1:, :]], dim=1).detach()
-                distances = torch.sqrt(torch.sum((other_KP - KP_locs[:, i:i + 1, :]) ** 2, dim=2))
-                rep_loss = torch.sum(torch.clamp_max(distances - net.repulse_extent, max=0.0) ** 2, dim=1)
-                repulsive_loss += net.l1(rep_loss, torch.zeros_like(rep_loss)) / net.K
+                other_KP = torch.cat(
+                    [KP_locs[:, :i, :], KP_locs[:, i + 1:, :]], dim=1).detach()
+                distances = torch.sqrt(
+                    torch.sum((other_KP - KP_locs[:, i:i + 1, :]) ** 2, dim=2))
+                rep_loss = torch.sum(torch.clamp_max(
+                    distances - net.repulse_extent, max=0.0) ** 2, dim=1)
+                repulsive_loss += net.l1(rep_loss,
+                                         torch.zeros_like(rep_loss)) / net.K
 
     return net.deform_fitting_power * (2 * fitting_loss + repulsive_loss)
 
@@ -68,7 +72,8 @@ def kalman_box_to_eight_point(kalman_bbox):
     z1 = kalman_bbox[2]-kalman_bbox[6]/2
     z2 = kalman_bbox[2]+kalman_bbox[6]/2
 
-    return [x1,y1,z1,x2,y2,z2]
+    return [x1, y1, z1, x2, y2, z2]
+
 
 def get_bbox_from_points(points):
     """
@@ -84,7 +89,9 @@ def get_bbox_from_points(points):
     z1 = torch.min(points[:, 2])
     z2 = torch.max(points[:, 2])
 
-    return [x1,y1,z1,x2,y2,z2], np.array([x1 + (x2-x1)/2, y1+ (y2-y1)/2,z1+ (z2-z1)/2, 0, x2-x1,y2-y1,z2-z1]) # x, y, z, theta, l, w, h
+    # x, y, z, theta, l, w, h
+    return [x1, y1, z1, x2, y2, z2], np.array([x1 + (x2-x1)/2, y1 + (y2-y1)/2, z1 + (z2-z1)/2, 0, x2-x1, y2-y1, z2-z1])
+
 
 def get_2d_bbox(points):
 
@@ -105,7 +112,8 @@ def IoU(bbox0, bbox1):
     """
 
     dim = int(len(bbox0)/2)
-    overlap = [max(0, min(bbox0[i+dim], bbox1[i+dim]) - max(bbox0[i], bbox1[i])) for i in range(dim)]
+    overlap = [max(0, min(bbox0[i+dim], bbox1[i+dim]) -
+                   max(bbox0[i], bbox1[i])) for i in range(dim)]
     intersection = 1
     for i in range(dim):
         intersection = intersection * overlap[i]
@@ -119,8 +127,9 @@ def IoU(bbox0, bbox1):
         return 0
     return intersection/union
 
+
 def do_range_projection(points):
-    #https: // github.com / PRBonn / semantic - kitti - api / blob / c4ef8140e21e589e6c795ec548584e13b2925b0f / auxiliary / laserscanvis.py  # L11
+    # https: // github.com / PRBonn / semantic - kitti - api / blob / c4ef8140e21e589e6c795ec548584e13b2925b0f / auxiliary / laserscanvis.py  # L11
     proj_H = 128
     proj_W = 2048
     fov_up = 3.0
@@ -152,14 +161,14 @@ def do_range_projection(points):
     proj_y = np.minimum(proj_H - 1, proj_y)
     proj_y = np.maximum(0, proj_y).astype(np.int32)   # in [0,H-1]
 
-
     return np.vstack((proj_x, proj_y))
+
 
 def euclidean_dist(b1, b2):
     ret_sum = 0
     for i in range(3):
         ret_sum += (b1[i] - b2[i])**2
-    return  torch.sqrt(ret_sum)
+    return torch.sqrt(ret_sum)
 
 
 class KPCNN(nn.Module):
@@ -190,7 +199,8 @@ class KPCNN(nn.Module):
 
             # Check equivariance
             if ('equivariant' in block) and (not out_dim % 3 == 0):
-                raise ValueError('Equivariant block but features dimension is not a factor of 3')
+                raise ValueError(
+                    'Equivariant block but features dimension is not a factor of 3')
 
             # Detect upsampling block to stop
             if 'upsample' in block:
@@ -270,7 +280,8 @@ class KPCNN(nn.Module):
         elif self.deform_fitting_mode == 'point2plane':
             raise ValueError('point2plane fitting mode not implemented yet.')
         else:
-            raise ValueError('Unknown fitting mode: ' + self.deform_fitting_mode)
+            raise ValueError('Unknown fitting mode: ' +
+                             self.deform_fitting_mode)
 
         # Combined loss
         return self.output_loss + self.reg_loss
@@ -325,7 +336,8 @@ class KPFCNN(nn.Module):
 
             # Check equivariance
             if ('equivariant' in block) and (not out_dim % 3 == 0):
-                raise ValueError('Equivariant block but features dimension is not a factor of 3')
+                raise ValueError(
+                    'Equivariant block but features dimension is not a factor of 3')
 
             # Detect change to next layer for skip connection
             if np.any([tmp in block for tmp in ['pool', 'strided', 'upsample', 'global']]):
@@ -398,11 +410,14 @@ class KPFCNN(nn.Module):
                 r *= 0.5
                 out_dim = out_dim // 2
 
-        self.head_mlp = UnaryBlock(out_dim, config.first_features_dim, False, 0)
-        self.head_var = UnaryBlock(config.first_features_dim, out_dim + config.free_dim, False, 0)
-        self.head_softmax = UnaryBlock(config.first_features_dim, self.C, False, 0)
-        self.head_center = UnaryBlock(config.first_features_dim, 1, False, 0, False)
-
+        self.head_mlp = UnaryBlock(
+            out_dim, config.first_features_dim, False, 0)
+        self.head_var = UnaryBlock(
+            config.first_features_dim, out_dim + config.free_dim, False, 0)
+        self.head_softmax = UnaryBlock(
+            config.first_features_dim, self.C, False, 0)
+        self.head_center = UnaryBlock(
+            config.first_features_dim, 1, False, 0, False)
 
         self.pre_train = config.pre_train
         ################
@@ -410,7 +425,8 @@ class KPFCNN(nn.Module):
         ################
 
         # List of valid labels (those not ignored in loss)
-        self.valid_labels = np.sort([c for c in lbl_values if c not in ign_lbls])
+        self.valid_labels = np.sort(
+            [c for c in lbl_values if c not in ign_lbls])
 
         # thing classes
         if config.task_set == 0:
@@ -419,13 +435,17 @@ class KPFCNN(nn.Module):
             self.things = 4
         elif config.task_set == 2:
             self.things = 6
-        else:
+        elif config.task_set == -1:
             self.things = 9
+        else:
+            raise ValueError('No such task set: {}'.format(self.task_set))
 
         # Choose segmentation loss
         if len(config.class_w) > 0:
-            class_w = torch.from_numpy(np.array(config.class_w, dtype=np.float32))
-            self.criterion = torch.nn.CrossEntropyLoss(weight=class_w, ignore_index=-1)
+            class_w = torch.from_numpy(
+                np.array(config.class_w, dtype=np.float32))
+            self.criterion = torch.nn.CrossEntropyLoss(
+                weight=class_w, ignore_index=-1)
         else:
             self.criterion = torch.nn.CrossEntropyLoss(ignore_index=-1)
 
@@ -462,7 +482,6 @@ class KPFCNN(nn.Module):
                 x = torch.cat([x, skip_x.pop()], dim=1)
             x = block_op(x, batch)
 
-
         # Head of network
         f = self.head_mlp(x, batch)
         c = self.head_center(f, batch)
@@ -494,12 +513,16 @@ class KPFCNN(nn.Module):
         # Cross entropy loss
         self.output_loss = self.criterion(outputs, target)
         weights = (centers_gt[:, 0] > 0) * 99 + (centers_gt[:, 0] >= 0) * 1
-        self.center_loss = weighted_mse_loss(centers_p, centers_gt[:, 0], weights)
+        self.center_loss = weighted_mse_loss(
+            centers_p, centers_gt[:, 0], weights)
 
         if not self.pre_train:
-            self.instance_half_loss = instance_half_loss(embeddings, ins_labels)
-            self.instance_loss = iou_instance_loss(centers_p, embeddings, variances, ins_labels, points, times)
-            self.variance_loss = variance_smoothness_loss(variances, ins_labels)
+            self.instance_half_loss = instance_half_loss(
+                embeddings, ins_labels)
+            self.instance_loss = iou_instance_loss(
+                centers_p, embeddings, variances, ins_labels, points, times)
+            self.variance_loss = variance_smoothness_loss(
+                variances, ins_labels)
             self.variance_l2 = variance_l2_loss(variances, ins_labels)
         # Regularization of deformable offsets
         if self.deform_fitting_mode == 'point2point':
@@ -507,11 +530,11 @@ class KPFCNN(nn.Module):
         elif self.deform_fitting_mode == 'point2plane':
             raise ValueError('point2plane fitting mode not implemented yet.')
         else:
-            raise ValueError('Unknown fitting mode: ' + self.deform_fitting_mode)
+            raise ValueError('Unknown fitting mode: ' +
+                             self.deform_fitting_mode)
 
         # Combined loss
-        #return self.instance_loss + self.variance_loss
-        return self.output_loss + self.reg_loss + self.center_loss + self.instance_loss*0.1+ self.variance_loss*0.01
+        return self.output_loss + self.reg_loss + self.center_loss + self.instance_loss*0.1 + self.variance_loss*0.01
 
     def ins_pred(self, predicted, centers_output, var_output, embedding, points=None, times=None):
         """
@@ -523,15 +546,14 @@ class KPFCNN(nn.Module):
         :param points: xyz location of points
         :return: instance ids for all points
         """
-        #predicted = torch.argmax(outputs.data, dim=1)
-
         if var_output.shape[1] - embedding.shape[1] > 4:
             global_emb, _ = torch.max(embedding, 0, keepdim=True)
-            embedding = torch.cat((embedding, global_emb.repeat(embedding.shape[0], 1)), 1)
+            embedding = torch.cat(
+                (embedding, global_emb.repeat(embedding.shape[0], 1)), 1)
 
-        if  var_output.shape[1] - embedding.shape[1] == 3:
+        if var_output.shape[1] - embedding.shape[1] == 3:
             embedding = torch.cat((embedding, points[0]), 1)
-        if  var_output.shape[1] - embedding.shape[1] == 4:
+        if var_output.shape[1] - embedding.shape[1] == 4:
             embedding = torch.cat((embedding, points[0], times), 1)
 
         if var_output.shape[1] == 3:
@@ -544,26 +566,26 @@ class KPFCNN(nn.Module):
         counter = 0
         ins_id = 1
         while True:
-            # ins_idxs = torch.where((predicted < 9) & (predicted != 0) & (ins_prediction == 0))
-            ins_idxs = torch.where((predicted < self.things) & (predicted != 0) & (ins_prediction == 0))
+            ins_idxs = torch.where((predicted < self.things) & (
+                predicted != 0) & (ins_prediction == 0))
             if len(ins_idxs[0]) == 0:
                 break
             ins_centers = centers_output[ins_idxs]
             ins_embeddings = embedding[ins_idxs]
             ins_variances = var_output[ins_idxs]
             if counter == 0:
-                sorted, indices = torch.sort(ins_centers, 0, descending=True)  # center score of instance classes
-            if sorted[0+counter] < 0.1 or (ins_id ==1 and sorted[0] < 0.7):
+                # center score of instance classes
+                sorted, indices = torch.sort(ins_centers, 0, descending=True)
+            if sorted[0+counter] < 0.1 or (ins_id == 1 and sorted[0] < 0.7):
                 break
             idx = indices[0+counter]
             mean = ins_embeddings[idx]
             var = ins_variances[idx]
-            #probs = pdf_normal(ins_embeddings, mean, var)
             probs = new_pdf_normal(ins_embeddings, mean, var)
 
             ins_points = torch.where(probs >= 0.5)
             if ins_points[0].size()[0] < 2:
-                counter +=1
+                counter += 1
                 if counter == sorted.shape[0]:
                     break
                 continue
@@ -590,7 +612,8 @@ class KPFCNN(nn.Module):
 
         if var_output.shape[1] - embedding.shape[1] > 4:
             global_emb, _ = torch.max(embedding, 0, keepdim=True)
-            embedding = torch.cat((embedding, global_emb.repeat(embedding.shape[0], 1)), 1)
+            embedding = torch.cat(
+                (embedding, global_emb.repeat(embedding.shape[0], 1)), 1)
 
         if var_output.shape[1] - embedding.shape[1] == 3:
             embedding = torch.cat((embedding, points[0]), 1)
@@ -604,7 +627,8 @@ class KPFCNN(nn.Module):
         ins_id = next_ins_id
 
         while True:
-            ins_idxs = torch.where((predicted < self.things) & (predicted != 0) & (ins_prediction == 0))
+            ins_idxs = torch.where((predicted < self.things) & (
+                predicted != 0) & (ins_prediction == 0))
             if len(ins_idxs[0]) == 0:
                 break
             ins_centers = centers_output[ins_idxs]
@@ -612,7 +636,8 @@ class KPFCNN(nn.Module):
             ins_variances = var_output[ins_idxs]
             ins_points = points[0][ins_idxs]
             if counter == 0:
-                sorted, indices = torch.sort(ins_centers, 0, descending=True)  # center score of instance classes
+                # center score of instance classes
+                sorted, indices = torch.sort(ins_centers, 0, descending=True)
             if sorted[0 + counter] < 0.1 or (sorted[0] < 0.7):
                 break
             idx = indices[0 + counter]
@@ -620,14 +645,15 @@ class KPFCNN(nn.Module):
             var = ins_variances[idx]
 
             center = points[0][ins_idxs][idx]
-            distances = torch.sum((ins_points - center)**2,1)
+            distances = torch.sum((ins_points - center)**2, 1)
             if torch.cuda.device_count() > 1:
                 new_device = torch.device("cuda:1")
-                probs = new_pdf_normal(ins_embeddings.to(new_device), mean.to(new_device), var.to(new_device))
+                probs = new_pdf_normal(ins_embeddings.to(
+                    new_device), mean.to(new_device), var.to(new_device))
             else:
                 probs = new_pdf_normal(ins_embeddings, mean, var)
 
-            probs[distances>20] = 0
+            probs[distances > 20] = 0
             ins_points = torch.where(probs >= 0.5)
             if ins_points[0].size()[0] < 2:
                 counter += 1
@@ -637,22 +663,21 @@ class KPFCNN(nn.Module):
 
             ids = ins_idxs[0][ins_points[0]]
             ins_prediction[ids] = ins_id
-            if ins_points[0].size()[0] > 25: #add to instance history
+            if ins_points[0].size()[0] > 25:  # add to instance history
                 ins_prediction[ids] = ins_id
                 mean = torch.mean(embedding[ids], 0, True)
                 bbox, kalman_bbox = get_bbox_from_points(points[0][ids])
-                tracker = KalmanBoxTracker(kalman_bbox ,ins_id)
+                tracker = KalmanBoxTracker(kalman_bbox, ins_id)
                 bbox_proj = None
-                #var = torch.mean(var_output[ids], 0, True)
-                new_instances[ins_id] = {'mean': mean, 'var': var, 'life' : 5, 'bbox': bbox, 'bbox_proj':bbox_proj, 'tracker': tracker, 'kalman_bbox' : kalman_bbox}
+                new_instances[ins_id] = {'mean': mean, 'var': var, 'life': 5, 'bbox': bbox,
+                                         'bbox_proj': bbox_proj, 'tracker': tracker, 'kalman_bbox': kalman_bbox}
 
             counter = 0
             ins_id += 1
 
-        #associate instances by hungarian alg. & bbox prediction via kalman filter
-        if len(prev_instances.keys()) > 0 :
+        # associate instances by hungarian alg. & bbox prediction via kalman filter
+        if len(prev_instances.keys()) > 0:
 
-            #association_costs, associations = self.associate_instances(config, prev_instances, new_instances, pose)
             associations = []
             for prev_id, new_id in associations:
                 ins_points = torch.where((ins_prediction == new_id))
@@ -661,9 +686,12 @@ class KPFCNN(nn.Module):
                 prev_instances[prev_id]['bbox_proj'] = new_instances[new_id]['bbox_proj']
 
                 prev_instances[prev_id]['life'] += 1
-                prev_instances[prev_id]['tracker'].update(new_instances[new_id]['kalman_bbox'], prev_id)
-                prev_instances[prev_id]['kalman_bbox'] = prev_instances[prev_id]['tracker'].get_state()
-                prev_instances[prev_id]['bbox'] = kalman_box_to_eight_point(prev_instances[prev_id]['kalman_bbox'])
+                prev_instances[prev_id]['tracker'].update(
+                    new_instances[new_id]['kalman_bbox'], prev_id)
+                prev_instances[prev_id]['kalman_bbox'] = prev_instances[prev_id]['tracker'].get_state(
+                )
+                prev_instances[prev_id]['bbox'] = kalman_box_to_eight_point(
+                    prev_instances[prev_id]['kalman_bbox'])
 
                 del new_instances[new_id]
 
@@ -693,31 +721,32 @@ class KPFCNN(nn.Module):
                 else:
                     cost_2d = 0
 
-                cost_center = euclidean_dist(v1['kalman_bbox'], v['kalman_bbox'])
+                cost_center = euclidean_dist(
+                    v1['kalman_bbox'], v['kalman_bbox'])
                 if cost_center > 1:
                     cost_center = 1e8
 
                 feature_cost = 1 - cos(v1['mean'], v['mean'])
                 if feature_cost > 0.05:
                     feature_cost = 1e8
-                costs = torch.tensor([cost_3d, cost_2d, cost_center, feature_cost])
+                costs = torch.tensor(
+                    [cost_3d, cost_2d, cost_center, feature_cost])
                 for idx, a_w in enumerate(config.association_weights):
                     association_costs[i, j] += a_w * costs[idx]
 
                 if i == 0:
                     current_ids.append(k1)
 
-        idxes_1, idxes_2 = linear_sum_assignment(association_costs.cpu().detach())
+        idxes_1, idxes_2 = linear_sum_assignment(
+            association_costs.cpu().detach())
 
         associations = []
 
         for i1, i2 in zip(idxes_1, idxes_2):
-            #max_cost = torch.sum((previous_instances[prev_ids[i1]]['var'][0,-3:]/2)**2)
             if association_costs[i1][i2] < 1e8:
                 associations.append((prev_ids[i1], current_ids[i2]))
 
         return association_costs, associations
-
 
     def accuracy(self, outputs, labels):
         """

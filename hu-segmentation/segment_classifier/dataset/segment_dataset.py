@@ -153,7 +153,6 @@ class SegmentDataset(Dataset):
         return segment_data
 
     def points_augmentation(self, points):
- 
         # standardization: zero-mean
         if self.rotate_to_center:
             _mean = points.mean(axis=0)

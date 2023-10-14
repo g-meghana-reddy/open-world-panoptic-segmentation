@@ -1,5 +1,6 @@
 import numpy as np
-import random,colorsys
+import random
+import colorsys
 
 
 def random_colors(N, bright=True, seed=0):
@@ -45,28 +46,28 @@ def parse_calibration(filename):
 
 
 def parse_poses(filename, calibration):
-	""" read poses file with per-scan poses from given filename
-		Returns
-		-------
-		list
-			list of poses as 4x4 numpy arrays.
-	"""
-	file = open(filename)
+    """ read poses file with per-scan poses from given filename
+            Returns
+            -------
+            list
+                    list of poses as 4x4 numpy arrays.
+    """
+    file = open(filename)
 
-	poses = []
+    poses = []
 
-	Tr = calibration["Tr"]
-	Tr_inv = np.linalg.inv(Tr)
+    Tr = calibration["Tr"]
+    Tr_inv = np.linalg.inv(Tr)
 
-	for line in file:
-		values = [float(v) for v in line.strip().split()]
+    for line in file:
+        values = [float(v) for v in line.strip().split()]
 
-		pose = np.zeros((4, 4))
-		pose[0, 0:4] = values[0:4]
-		pose[1, 0:4] = values[4:8]
-		pose[2, 0:4] = values[8:12]
-		pose[3, 3] = 1.0
+        pose = np.zeros((4, 4))
+        pose[0, 0:4] = values[0:4]
+        pose[1, 0:4] = values[4:8]
+        pose[2, 0:4] = values[8:12]
+        pose[3, 3] = 1.0
 
-		poses.append(np.matmul(Tr_inv, np.matmul(pose, Tr)))
+        poses.append(np.matmul(Tr_inv, np.matmul(pose, Tr)))
 
-	return poses
+    return poses

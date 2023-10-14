@@ -24,6 +24,7 @@
 # Common libs
 import argparse
 import signal
+import os
 
 # Dataset
 from datasets.SemanticKitti import *
@@ -39,6 +40,7 @@ import pdb
 #           Config Class
 #       \******************/
 #
+
 
 class SemanticKittiConfig(Config):
     """
@@ -96,7 +98,6 @@ class SemanticKittiConfig(Config):
                     'nearest_upsample',
                     'unary']
 
-
     ###################
     # KPConv parameters
     ###################
@@ -104,7 +105,7 @@ class SemanticKittiConfig(Config):
     # Radius of the input sphere
     in_radius = 6.0
     val_radius = 51.0
-    n_frames = 1 # 4
+    n_frames = 1  # 4
     max_in_points = 100000
     max_val_points = 100000
 
@@ -150,8 +151,10 @@ class SemanticKittiConfig(Config):
     # 'point2plane' fitting geometry by penalizing distance from deform point to input point triplet (not implemented)
     deform_fitting_mode = 'point2point'
     deform_fitting_power = 1.0              # Multiplier for the fitting/repulsive loss
-    deform_lr_factor = 0.1                  # Multiplier for learning rate applied to the deformations
-    repulse_extent = 1.2                    # Distance of repulsion for deformed kernel points
+    # Multiplier for learning rate applied to the deformations
+    deform_lr_factor = 0.1
+    # Distance of repulsion for deformed kernel points
+    repulse_extent = 1.2
 
     #####################
     # Training parameters
@@ -204,7 +207,7 @@ class SemanticKittiConfig(Config):
 
     # Only train class and center head
     pre_train = False
-    
+
     # use wandb for logging
     wandb = False
 
@@ -214,14 +217,21 @@ class SemanticKittiConfig(Config):
 #       \******************/
 #
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=2)
-    parser.add_argument("-s", "--saving_path", help="Path to save predictions", default=None)
-    parser.add_argument("-p", "--prev_train_path", help="Directory to load checkpoint", default=None)
-    parser.add_argument("-i", "--chkp_idx", help="Index of checkpoint", type=int, default=2)
-    parser.add_argument("--pretrain", action="store_true", help="Pretrain network")
-    parser.add_argument("--wandb", action="store_true", help="Use wandb for logging")
+    parser.add_argument("-t", "--task_set",
+                        help="Task Set ID", type=int, default=2)
+    parser.add_argument("-s", "--saving_path",
+                        help="Path to save predictions", default=None)
+    parser.add_argument("-p", "--prev_train_path",
+                        help="Directory to load checkpoint", default=None)
+    parser.add_argument("-i", "--chkp_idx",
+                        help="Index of checkpoint", type=int, default=2)
+    parser.add_argument("--pretrain", action="store_true",
+                        help="Pretrain network")
+    parser.add_argument("--wandb", action="store_true",
+                        help="Use wandb for logging")
     args = parser.parse_args()
     return args
 
@@ -247,7 +257,6 @@ if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = GPU_ID
 
     args = parse_args()
-    
     if args.wandb:
         wandb.init(project="mscv-capstone")
 
@@ -256,18 +265,14 @@ if __name__ == '__main__':
     ###############
 
     # Choose here if you want to start training from a previous snapshot (None for new training)
-
-    # previous_training_path = 'Log_2020-06-05_17-18-35'
-    # previous_training_path = 'Log_2020-10-06_16-51-05'#'Log_2020-08-30_01-29-20'
-    # previous_training_path = ''
-    # Choose index of checkpoint to start from. If None, uses the latest chkp
-    # chkp_idx = None
     previous_training_path = args.prev_train_path
+    # Choose index of checkpoint to start from. If None, uses the latest chkp
     chkp_idx = args.chkp_idx
     if previous_training_path:
 
         # Find all snapshot in the chosen training folder
-        chkp_path = os.path.join('results', 'checkpoints', previous_training_path, 'checkpoints')
+        chkp_path = os.path.join(
+            'results', 'checkpoints', previous_training_path, 'checkpoints')
         chkps = [f for f in os.listdir(chkp_path) if f[:4] == 'chkp']
 
         # Find which snapshot to restore
@@ -275,7 +280,8 @@ if __name__ == '__main__':
             chosen_chkp = 'current_chkp.tar'
         else:
             chosen_chkp = np.sort(chkps)[chkp_idx]
-        chosen_chkp = os.path.join('results', 'checkpoints', previous_training_path, 'checkpoints', chosen_chkp)
+        chosen_chkp = os.path.join(
+            'results', 'checkpoints', previous_training_path, 'checkpoints', chosen_chkp)
 
     else:
         chosen_chkp = None
@@ -284,7 +290,6 @@ if __name__ == '__main__':
     # Prepare Data
     ##############
 
-
     print()
     print('Data Preparation')
     print('****************')
@@ -292,11 +297,12 @@ if __name__ == '__main__':
     # Initialize configuration class
     config = SemanticKittiConfig()
     if previous_training_path:
-        config.load(os.path.join('results', 'checkpoints', previous_training_path))
+        config.load(os.path.join(
+            'results', 'checkpoints', previous_training_path))
         config.saving_path = None
     config.pre_train = args.pretrain
     config.free_dim = 4
-    config.n_frames = 1 # 4
+    config.n_frames = 1  # 4
     config.reinit_var = True
     config.n_test_frames = 1
     #config.sampling = 'objectness'
@@ -308,9 +314,6 @@ if __name__ == '__main__':
         config.stride = 2
         config.sampling = None
     config.decay_sampling = 'None'
-    # Get path from argument if given
-    # if len(sys.argv) > 1:
-    #     config.saving_path = sys.argv[1]
 
     config.task_set = args.task_set
     config.saving_path = args.saving_path
@@ -322,7 +325,8 @@ if __name__ == '__main__':
     else:
         config.max_epoch = 800
         config.learning_rate = 1e-3
-    config.lr_decays = {i: 0.1 ** (1 / 200) for i in range(1, config.max_epoch)}
+    config.lr_decays = {i: 0.1 ** (1 / 200)
+                        for i in range(1, config.max_epoch)}
 
     # Initialize datasets
     training_dataset = SemanticKittiDataset(config, set='training',
@@ -356,16 +360,13 @@ if __name__ == '__main__':
     training_sampler.calibration(training_loader, verbose=True)
     test_sampler.calibration(test_loader, verbose=True)
 
-    # debug_timing(training_dataset, training_loader)
-    # debug_timing(test_dataset, test_loader)
-    # debug_class_w(training_dataset, training_loader)
-
     print('\nModel Preparation')
     print('*****************')
 
     # Define network model
     t1 = time.time()
-    net = KPFCNN(config, training_dataset.label_values, training_dataset.ignored_labels)
+    net = KPFCNN(config, training_dataset.label_values,
+                 training_dataset.ignored_labels)
 
     debug = False
     if debug:
@@ -376,7 +377,8 @@ if __name__ == '__main__':
             if param.requires_grad:
                 print(param.shape)
         print('\n*************************************\n')
-        print("Model size %i" % sum(param.numel() for param in net.parameters() if param.requires_grad))
+        print("Model size %i" % sum(param.numel()
+              for param in net.parameters() if param.requires_grad))
         print('\n*************************************\n')
 
     # Define a trainer class

@@ -1,3 +1,12 @@
+# CUDA_VISIBLE_DEVICES=2 python segment_with_classifier.py -t 1 -d kitti-360 -s 5 -o /project_data/ramanan/achakrav/4D-PLS/results/validation/val_preds_TS1_kitti360_updated_vocab -sd ../results/predictions/Kitti360/hlps_agnostic_regressor_TS1_updated_building
+# System imports
+from utils import *
+from tree_utils import flatten_indices, flatten_labels, flatten_scores
+from segment_classifier.model.pointnet2 import PointNet2Classification
+from tqdm import tqdm
+import torch
+from sklearn.cluster import DBSCAN
+import numpy as np
 import argparse
 import glob
 import os
@@ -6,17 +15,13 @@ import yaml
 
 sys.path.append("segment_classifier/")
 
-import numpy as np
-from sklearn.cluster import DBSCAN
-import torch
-from tqdm import tqdm
+# Third-party imports
 
-from segment_classifier.model.pointnet2 import PointNet2Classification
-from tree_utils import flatten_indices, flatten_labels, flatten_scores
-from utils import *
+# Relative imports
 
 
 NUM_POINTS = 1024
+
 
 class Config:
     # Model config
@@ -45,21 +50,23 @@ def evaluate(model, points, features=None):
 
     # TODO: what to do about n_points?
     if num_points_in_segment > NUM_POINTS:
-        chosen_idxs = np.random.choice(np.arange(num_points_in_segment), NUM_POINTS, replace=False)
+        chosen_idxs = np.random.choice(
+            np.arange(num_points_in_segment), NUM_POINTS, replace=False)
     else:
         chosen_idxs = np.arange(0, num_points_in_segment, dtype=np.int32)
         if num_points_in_segment < NUM_POINTS:
-            extra_idxs = np.random.choice(chosen_idxs, NUM_POINTS - len(chosen_idxs), replace=True)
+            extra_idxs = np.random.choice(
+                chosen_idxs, NUM_POINTS - len(chosen_idxs), replace=True)
             chosen_idxs = np.concatenate([chosen_idxs, extra_idxs], axis=0)
     np.random.shuffle(chosen_idxs)
     points = torch.from_numpy(points[chosen_idxs]).cuda().float()
 
     _mean = torch.mean(points, axis=0)
     _theta = torch.atan2(_mean[1], _mean[0]).cpu().numpy()
-    _rot = torch.from_numpy(np.array([[ np.cos(_theta), np.sin(_theta)],
-                        [-np.sin(_theta), np.cos(_theta)]])).cuda().float()
-    
-    points[:,:2] = torch.matmul(_rot, (points[:,:2] - _mean[None,:2]).T).T
+    _rot = torch.from_numpy(np.array([[np.cos(_theta), np.sin(_theta)],
+                                      [-np.sin(_theta), np.cos(_theta)]])).cuda().float()
+
+    points[:, :2] = torch.matmul(_rot, (points[:, :2] - _mean[None, :2]).T).T
 
     if features is not None:
         features = torch.from_numpy(features[chosen_idxs]).cuda().float()
@@ -81,20 +88,20 @@ def evaluate(model, points, features=None):
                 sem = -1
     return score, sem
 
-    
+
 def segment(model, id_, eps_list, cloud, features=None, original_indices=None, aggr_func='min'):
     if not all(eps_list[i] > eps_list[i+1] for i in range(len(eps_list)-1)):
         raise ValueError('eps_list is not sorted in descending order')
 
     # pick the first threshold from the list
     max_eps = eps_list[0]
-    if original_indices is None: 
+    if original_indices is None:
         original_indices = np.arange(cloud.shape[0])
-    if isinstance(original_indices, list): 
+    if isinstance(original_indices, list):
         original_indices = np.array(original_indices)
 
     # spatial segmentation
-    dbscan = DBSCAN(max_eps, min_samples=1).fit(cloud[original_indices,:])
+    dbscan = DBSCAN(max_eps, min_samples=1).fit(cloud[original_indices, :])
     labels = dbscan.labels_
 
     # evaluate every segment
@@ -138,7 +145,7 @@ def segment(model, id_, eps_list, cloud, features=None, original_indices=None, a
             flat_fine_indices = flatten_indices(fine_indices)
             sum_count, sum_score = 0, 0.0
             for indices, score in zip(flat_fine_indices, flat_fine_scores):
-                squared_dists = np.sum(cloud[inds,:]**2, axis=1)
+                squared_dists = np.sum(cloud[inds, :]**2, axis=1)
                 sum_count += np.sum(squared_dists)
                 sum_score += np.sum(squared_dists * score)
             aggr_score = float(sum_score)/sum_count
@@ -151,7 +158,7 @@ def segment(model, id_, eps_list, cloud, features=None, original_indices=None, a
             final_indices.append(fine_indices)
             final_scores.append(fine_scores)
             final_sem_labels.append(fine_sem_labels)
-        else: # otherwise
+        else:  # otherwise
             final_indices.append(inds)
             final_scores.append(score)
             final_sem_labels.append(sem_label)
@@ -160,14 +167,24 @@ def segment(model, id_, eps_list, cloud, features=None, original_indices=None, a
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-t", "--task_set", help="Task Set ID", type=int, default=-1)
-    parser.add_argument("-d", "--dataset", help="Dataset", default='semantic-kitti')
-    parser.add_argument("-s", "--sequence", help="Sequence", type=int, default=8)
-    parser.add_argument("-o", "--objsem_folder", help="Folder with object and semantic predictions", type=str, default="/project_data/ramanan/mganesin/4D-PLS/test/4DPLS_original_params_original_repo_nframes1_1e-3_softmax/val_probs")
-    parser.add_argument("-sd", "--save_dir", help="Save directory", type=str, default='test/LOSP')
-    parser.add_argument("--ckpt", help="Checkpoint to load for segment classifier", type=str, default=None)
-    parser.add_argument("--use-sem-features", help="Whether to use semantic features in classifier", action="store_true")
-    parser.add_argument("--use-sem-refinement", help="Whether to use semantic refinement head", action="store_true")
+    parser.add_argument("-t", "--task_set",
+                        help="Task Set ID", type=int, default=-1)
+    parser.add_argument("-d", "--dataset", help="Dataset",
+                        default='semantic-kitti')
+    parser.add_argument("-s", "--sequence",
+                        help="Sequence", type=int, default=8)
+    parser.add_argument("-o", "--objsem_folder", help="Folder with object and semantic predictions", type=str,
+                        default="/project_data/ramanan/mganesin/4D-PLS/test/4DPLS_original_params_original_repo_nframes1_1e-3_softmax/val_probs")
+    parser.add_argument("-sd", "--save_dir",
+                        help="Save directory", type=str, default='test/LOSP')
+    parser.add_argument("-n", "--network", help="Which network to use",
+                        choices=["regressor", "classifier"], default="regressor")
+    parser.add_argument(
+        "--ckpt", help="Checkpoint to load for segment classifier", type=str, default=None)
+    parser.add_argument(
+        "--use-sem-features", help="Whether to use semantic features in classifier", action="store_true")
+    parser.add_argument("--use-sem-refinement",
+                        help="Whether to use semantic refinement head", action="store_true")
     args = parser.parse_args()
     return args
 
@@ -176,37 +193,32 @@ if __name__ == '__main__':
     args = parse_args()
 
     if args.task_set == 0:
-        # unk_labels = [1, 2]
+        known_labels = [1, 2]
         unk_labels = [7]
     elif args.task_set == 1:
-        # unk_labels = [1, 2, 3]
+        if args.dataset == "semantic-kitti":
+            known_labels = [1, 2, 3]
+        else:
+            known_labels = [1, 2, 3, 6]
         unk_labels = [10]
     elif args.task_set == 2:
-        # unk_labels = [1, 2, 3, 4, 5]
+        if args.dataset == "semantic-kitti":
+            known_labels = [1, 2, 3, 4, 5]
+        else:
+            known_labels = [1, 2, 3, 4, 5, 9, 14, 15]
         unk_labels = [16]
     elif args.task_set == -1:
-        unk_labels = range(1, 9)
+        known_labels = range(1, 9)
+        unk_labels = [1]
     else:
         raise ValueError('Unknown task set: {}'.format(args.task_set))
 
     if args.use_sem_refinement:
-        in_channels = 256 # 0
-        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats_sem_refinement_weighted/checkpoints/epoch_200.pth"
-        # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/sem_feats_only_focal_sem_refinement_weighted_project_input_1024/checkpoints/epoch_200.pth"
-        # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats_sem_reifnement_weighted_new_indices/checkpoints/epoch_200.pth"
-        # args.ckpt = "/project_data/ramanan/mganesin/4D-PLS/results/checkpoints/xyz_sem_mean_refine/checkpoints/epoch_200.pth"
+        in_channels = 256
     elif args.use_sem_features:
         in_channels = 256
-        # args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/sem_xyz/checkpoints/epoch_200.pth"
-        args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_focal_sem_feats/checkpoints/epoch_50.pth"
     else:
         in_channels = 0
-        if args.task_set == -1:
-            args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_regression_MSE_LOSS_200_double_mlp_full_dataset/checkpoints/epoch_200.pth"
-        elif args.task_set == 1:
-            args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_regressor_TS1/checkpoints/epoch_200.pth"
-        else:
-            args.ckpt = "/project_data/ramanan/achakrav/4D-PLS/results/checkpoints/xyz_mean_regressor_TS2/checkpoints/epoch_200.pth"
 
     # instantiate the segment classifier
     cfg = Config()
@@ -221,7 +233,8 @@ if __name__ == '__main__':
 
     if args.dataset == 'semantic-kitti':
         seq = '{:02d}'.format(args.sequence)
-        scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + seq + '/velodyne/'
+        scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/SemanticKitti/sequences/' + \
+            seq + '/velodyne/'
         scan_files = load_paths(scan_folder)
 
         if args.task_set == -1:
@@ -237,18 +250,20 @@ if __name__ == '__main__':
             else:
                 learning_map_inv = doc['task_set_map'][args.task_set]['learning_map_inv']
                 learning_map_doc = doc['task_set_map'][args.task_set]['learning_map']
-            learning_map = np.zeros((np.max([k for k in learning_map_doc.keys()]) + 1), dtype=np.int32)
+            learning_map = np.zeros(
+                (np.max([k for k in learning_map_doc.keys()]) + 1), dtype=np.int32)
             for k, v in learning_map_doc.items():
                 learning_map[k] = v
 
-            inv_learning_map = np.zeros((np.max([k for k in learning_map_inv.keys()]) + 1), 
-                                dtype=np.int32)
+            inv_learning_map = np.zeros((np.max([k for k in learning_map_inv.keys()]) + 1),
+                                        dtype=np.int32)
             for k, v in learning_map_inv.items():
                 inv_learning_map[k] = v
 
     elif args.dataset == 'kitti-360':
         seq = '2013_05_28_drive_{:04d}_sync'.format(args.sequence)
-        scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/data_3d_raw/' + seq + '/velodyne_points/data/'
+        scan_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/data_3d_raw/' + \
+            seq + '/velodyne_points/data/'
         label_folder = '/project_data/ramanan/achakrav/4D-PLS/data/Kitti360/data_3d_raw_labels/' + seq + '/labels/'
         label_files = glob.glob(label_folder + '/*')
         file_ids = [x.split('/')[-1][:-6] for x in label_files]
@@ -270,15 +285,16 @@ if __name__ == '__main__':
             else:
                 learning_map_inv = doc['task_set_map'][args.task_set]['learning_map_inv']
                 learning_map_doc = doc['task_set_map'][args.task_set]['learning_map']
-            learning_map = np.zeros((np.max([k for k in learning_map_doc.keys()]) + 1), dtype=np.int32)
+            learning_map = np.zeros(
+                (np.max([k for k in learning_map_doc.keys()]) + 1), dtype=np.int32)
             for k, v in learning_map_doc.items():
                 learning_map[k] = v
 
-            inv_learning_map = np.zeros((np.max([k for k in learning_map_inv.keys()]) + 1), 
-                                dtype=np.int32)
+            inv_learning_map = np.zeros((np.max([k for k in learning_map_inv.keys()]) + 1),
+                                        dtype=np.int32)
             for k, v in learning_map_inv.items():
                 inv_learning_map[k] = v
-        
+
     objsem_folder = args.objsem_folder
     objsem_files = load_paths(objsem_folder)
     if args.dataset == "kitti-360":
@@ -295,20 +311,12 @@ if __name__ == '__main__':
         if '_c.' in file:
             obj_file_mask.append(idx)
         elif '_i.' in file:
-            # Added for nframes=2
-            # frame_name = file.split('/')[-1]
-            # if len(frame_name.split('_')) < 4:
             ins_file_mask.append(idx)
         elif '_e' in file:
-            # frame_name = file.split('/')[-1]
-            # if len(frame_name.split('_')) < 4:
             emb_file_mask.append(idx)
         elif '_u.' not in file and '_t.' not in file and '_pots.' not in file and '.ply' not in file and '_s.' not in file:
-            # Added for nframes=2
-            # frame_name = file.split('/')[-1]
-            # if len(frame_name.split('_')) < 3:
             sem_file_mask.append(idx)
-    
+
     objectness_files = objsem_files[obj_file_mask]
     semantic_files = objsem_files[sem_file_mask]
     instance_files = objsem_files[ins_file_mask]
@@ -347,13 +355,13 @@ if __name__ == '__main__':
         else:
             semantic_features = None
 
-        if len(unk_labels) == 1:
-            mask = np.where(labels == unk_labels[0])
-        else:
-            mask = np.where(np.logical_and(labels > 0, labels < np.max(unk_labels)))
+        mask = np.logical_and(labels > 0, labels == unk_labels[0])
+        for known_label in known_labels:
+            mask = np.logical_or(mask, labels == known_label)
 
         pts_velo_cs_objects = pts_velo_cs[mask]
-        objectness_objects = objectness[mask]  # todo: change objectness_objects into a local variable
+        # todo: change objectness_objects into a local variable
+        objectness_objects = objectness[mask]
         pts_indexes_objects = pts_indexes[mask]
 
         assert (len(pts_velo_cs_objects) == len(objectness_objects))
