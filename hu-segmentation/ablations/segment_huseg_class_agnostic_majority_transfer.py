@@ -25,27 +25,34 @@ def segment(id_, eps_list, cloud, original_indices=None, aggr_func='min'):
         raise ValueError('eps_list is not sorted in descending order')
     # pick the first threshold from the list
     max_eps = eps_list[0]
-    #
+
+    # Generate the indices if it does not exist
     if original_indices is None: original_indices = np.arange(cloud.shape[0])
     if isinstance(original_indices, list): original_indices = np.array(original_indices)
-    # spatial segmentation
+    
+    # Spatial Segmentation: run DBSCAN to get clusters
     dbscan = DBSCAN(max_eps, min_samples=1).fit(cloud[original_indices,:])
     labels = dbscan.labels_
-    # evaluate every segment
+
+    # Evaluate every segment from the list of clusters
     indices, scores = [], []
     for unique_label in np.unique(labels):
         inds = original_indices[np.flatnonzero(labels == unique_label)]
         indices.append(inds.tolist())
         scores.append(evaluate(inds))
-    # return if we are done
+
+    # Return if we are done
     if len(eps_list) == 1: return indices, scores
-    # expand recursively
+
+    # Compute the hierarchical tree
     final_indices, final_scores = [], []
     for i, (inds, score) in enumerate(zip(indices, scores)):
         # focus on this segment
         fine_indices, fine_scores = segment(id_, eps_list[1:], cloud, inds)
+
         # flatten scores to get the minimum (keep structure)
         flat_fine_scores = flatten_scores(fine_scores)
+
         if aggr_func == 'min':
             aggr_score = np.min(flat_fine_scores)
         elif aggr_func == 'avg':
@@ -70,38 +77,15 @@ def segment(id_, eps_list, cloud, original_indices=None, aggr_func='min'):
                 sum_score += np.sum(squared_dists * score)
             aggr_score = float(sum_score)/sum_count
 
-        # COMMENTING THIS OUT BECAUSE OF ADDING SUM AS AN AGGR FUNC
-        # assert(aggr_score <= 1 and aggr_score >= 0)
-
-        # if splitting is better
+        # If splitting is better the the aggr_score should be better than the current score
         if score < aggr_score:
             final_indices.append(fine_indices)
             final_scores.append(fine_scores)
         else: # otherwise
             final_indices.append(inds)
             final_scores.append(score)
+
     return final_indices, final_scores
-
-
-def vis_instance_o3d():
-    # visualization
-    pcd_objects = o3d.geometry.PointCloud()
-    colors = np.zeros((len(pts_velo_cs_objects), 4))
-    max_instance = len(flat_indices)
-    print(f"point cloud has {max_instance + 1} clusters")
-    colors_instance = plt.get_cmap("tab20")(np.arange(len(flat_indices)) / (max_instance if max_instance > 0 else 1))
-
-    for idx in range(len(flat_indices)):
-        colors[flat_indices[idx]] = colors_instance[idx]
-
-    pcd_objects.points = o3d.utility.Vector3dVector(pts_velo_cs_objects[:, :3])
-    pcd_objects.colors = o3d.utility.Vector3dVector(colors[:, :3])
-
-    pcd_background = o3d.geometry.PointCloud()
-    pcd_background.points = o3d.utility.Vector3dVector(pts_velo_cs[background_mask, :3])
-    pcd_background.paint_uniform_color([0.5, 0.5, 0.5])
-
-    o3d.visualization.draw_geometries([pcd_objects, pcd_background])
 
 
 def parse_args():
@@ -121,13 +105,7 @@ def parse_args():
 if __name__ == '__main__':
 
     args = parse_args()
-    # if args.task_set == 0:
-    #     unk_label = 7
-    # elif args.task_set == 1:
-    #     unk_label = 10
-    # else:
-    #     raise ValueError('Unknown task set: {}'.format(args.task_set))
-    # unk_labels = range(1, 7)
+    
     if args.task_set == 1:
         max_inst_label = 4
     elif args.task_set == -1:
@@ -178,7 +156,6 @@ if __name__ == '__main__':
             os.path.join(scan_folder, file_id + '.bin') for file_id in file_ids
         ])
         
-        # objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/test/val_preds_TS{}_kitti360/val_probs/'.format(args.task_set)
         objsem_folder = '/project_data/ramanan/achakrav/4D-PLS/results/validation/val_preds_TS1_kitti360_1_frames_1e-3_huseg_known_thresholded/val_probs/'#.format(args.task_set)
     
     if not os.path.exists(args.save_dir):
@@ -249,34 +226,23 @@ if __name__ == '__main__':
 
         # segmentation with point-net
         id_ = 0
-        # eps_list = [2.0, 1.0, 0.5, 0.25]
         eps_list_tum = [1.2488, 0.8136, 0.6952, 0.594, 0.4353, 0.3221]
         indices, scores = segment(id_, eps_list_tum, pts_velo_cs_objects[:, :3])
 
-        # flatten list(list(...(indices))) into list(indices)
         flat_indices = flatten_indices(indices)
         # map from object_indexes to pts_indexes
         mapped_indices = []
         for indexes in flat_indices:
             mapped_indices.append(pts_indexes_objects[indexes].tolist())
 
-        # mapped_flat_indices = pts_indexes_objects
         flat_scores = flatten_scores(scores)
 
         new_instance = instances.max() + 1
         for id, indices in enumerate(mapped_indices):
-            # if flat_scores[id] < args.threshold:
-            #     instances[indices] = -1
-            # else:
             instances[indices] = new_instance + id
 
             # majority semantic label in the segment is the new assignment
             labels[indices] = np.bincount(labels[indices]).argmax()
-
-            # softmax based label transfer
-            # things_softmax = softmax_scores[indices][:, :8]
-            # labels[indices] = np.mean(things_softmax, axis = 0).argmax() + 1
-
         # Create .label files using the updated instance and semantic labels
         sem_labels = labels.astype(np.int32)
         inv_sem_labels = inv_learning_map[sem_labels]
