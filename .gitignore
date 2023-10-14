@@ -21,3 +21,5 @@ segment_classifier/segment_dataset
 **/dist
 segment_classifier/segment_dataset
 hu-segmentation/segment_classifier/segment_dataset/*
+
+confusion_matrix_files/*

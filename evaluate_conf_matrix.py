@@ -57,6 +57,7 @@ torch.cuda.manual_seed_all(0)
 
 def parse_args():
     parser = argparse.ArgumentParser()
+
     parser.add_argument("-t", "--task_set",
                         help="Task Set ID", type=int, default=2)
     parser.add_argument("-p", "--prev_train_path",
@@ -69,6 +70,7 @@ def parse_args():
                         action="store_true", default=False)
     parser.add_argument(
         "-s", "--seq", help="Sequence number", type=int, default=8)
+
     args = parser.parse_args()
     return args
 
@@ -85,6 +87,7 @@ if __name__ == '__main__':
     # Initialize the environment
     ############################
     args = parse_args()
+
 
     ###############
     # Previous chkp
@@ -134,9 +137,10 @@ if __name__ == '__main__':
     config.sampling = 'importance'
     config.decay_sampling = 'None'
 
+
     if args.semantic_kitti:
-        config.validation_size = 4071
         dataset_name = 'semantic_kitti'
+
 
     if args.kitti360:
         data_dir = 'data/Kitti360'
@@ -145,7 +149,12 @@ if __name__ == '__main__':
         config.epoch_steps = len(glob.glob(seq_dir + '/*.label'))
         config.validation_size = config.epoch_steps
         config.sequence = args.seq
+
         dataset_name = 'kitti360'
+        xlabels = ['car', 'truck', 'person', 'road', 'sidewalk', 'building', 'fence', 'vegetation','terrain','ground', 'parking', 'rail track', 'wall', 'bridge', 'tunnel', 'pole','polegroup', 'traffic light','traffic sign', 'bus', 'caravan', 'trailer','train', 'motorcycle', 'bicycle', 'garage', 'gate', 'stop','smallpole','lamp','trash bin', 'vend. m/c', 'box', 'unk constr','unk vehicle', 'unk object']
+        ylabels = ['car', 'truck', 'person', 'road', 'sidewalk', 'building', 'fence', 'vegetation','terrain','other']
+        shrink=0.45
+
 
     config.task_set = args.task_set
 
@@ -168,8 +177,13 @@ if __name__ == '__main__':
                                        return_unknowns=return_unknowns,
                                        seqential_batch=True)
 
-    # Initialize samplers
-    test_sampler = SemanticKittiSampler(test_dataset)
+        if args.semantic_kitti:
+            # Initialize datasets
+            test_dataset = SemanticKittiDataset(config, set='validation',
+                                                balance_classes=False,
+                                                return_unknowns=return_unknowns,
+                                                seqential_batch=True)
+
 
     # Initialize the dataloader
     test_loader = DataLoader(test_dataset,
@@ -179,17 +193,22 @@ if __name__ == '__main__':
                              num_workers=config.input_threads,
                              pin_memory=True)
 
-    # Calibrate max_in_point value
-    test_sampler.calib_max_in(config, test_loader, verbose=True)
 
-    # Calibrate samplers
-    test_sampler.calibration(test_loader, verbose=True)
+        # Initialize the dataloader
+        test_loader = DataLoader(test_dataset,
+                                batch_size=1,
+                                sampler=test_sampler,
+                                collate_fn=SemanticKittiCollate,
+                                num_workers=config.input_threads,
+                                pin_memory=True)
 
-    print('\nModel Preparation')
-    print('*****************')
 
-    # Define network model
-    t1 = time.time()
+        # Calibrate max_in_point value
+        test_sampler.calib_max_in(config, test_loader, verbose=True)
+
+        # Calibrate samplers
+        test_sampler.calibration(test_loader, verbose=True)
+
 
     checkpoint = torch.load(chosen_chkp)
 
@@ -198,8 +217,10 @@ if __name__ == '__main__':
     net.load_state_dict(checkpoint['model_state_dict'])
     net.eval()
 
-    # Define a trainer class
-    print('Done in {:.1f}s\n'.format(time.time() - t1))
+
+        # Define network model
+        t1 = time.time()
+
 
     print('\nStart forward pass')
     print('**************')
