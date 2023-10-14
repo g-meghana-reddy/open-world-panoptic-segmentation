@@ -1,0 +1,11 @@
+python generate_segment_dataset.py -s 0 -g 0 &
+python generate_segment_dataset.py -s 1 -g 1 &
+python generate_segment_dataset.py -s 2 -g 2 &
+python generate_segment_dataset.py -s 3 -g 3 &
+python generate_segment_dataset.py -s 4 -g 3 &
+python generate_segment_dataset.py -s 5 -g 4 &
+python generate_segment_dataset.py -s 6 -g 4 &
+python generate_segment_dataset.py -s 7 -g 5 &
+python generate_segment_dataset.py -s 8 -g 6 &
+python generate_segment_dataset.py -s 9 -g 7 &
+python generate_segment_dataset.py -s 10 -g 7 &

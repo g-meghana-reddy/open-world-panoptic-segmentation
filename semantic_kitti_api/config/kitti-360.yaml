@@ -1,0 +1,318 @@
+# This file is covered by the LICENSE file in the root of this project.
+labels: 
+    0: "unlabeled"
+    1: "ego vehicle"
+    2: "rectification border"
+    3: "out of roi"
+    4: "static"
+    5: "dynamic"
+    6: "ground"
+    7: "road"
+    8: "sidewalk"
+    9: "parking"
+    10: "rail track"
+    11: "building"
+    12: "wall"
+    13: "fence"
+    14: "guard rail"
+    15: "bridge"
+    16: "tunnel"
+    17: "pole"
+    18: "polegroup"
+    19: "traffic light"
+    20: "traffic sign"
+    21: "vegetation"
+    22: "terrain"
+    23: "sky"
+    24: "person"
+    25: "rider"
+    26: "car"
+    27: "truck"
+    28: "bus"
+    29: "caravan"
+    30: "trailer"
+    31: "train"
+    32: "motorcycle"
+    33: "bicycle"
+    34: "garage"
+    35: "gate"
+    36: "stop"
+    37: "smallpole"
+    38: "lamp"
+    39: "trash bin"
+    40: "vending machine"
+    41: "box"
+    42: "unknown construction"
+    43: "unknown vehicle"
+    44: "unknown object"
+    100: "catch-all"
+color_map: # bgr
+    0: [0, 0, 0]
+    1: [0, 0, 0]
+    2: [0, 0, 0]
+    3: [0, 0, 0]
+    4: [0, 0, 0]
+    5: [0, 74, 111]
+    6: [75, 0, 175]     # [81, 0, 81]
+    7: [255, 0, 255]    # [128, 64, 128]
+    8: [75, 0, 75]      # [232, 35, 244]
+    9: [255, 150, 255]  # [160, 170, 250]
+    10: [140, 150, 230]
+    11: [0, 200, 255]   # [70, 70, 70]
+    12: [156, 102, 102]
+    13: [50, 120, 255]  # [153, 153, 190]
+    14: [180, 165, 180]
+    15: [100, 100, 150]
+    16: [90, 120, 150]
+    17: [150, 240, 255] # [153, 153, 153]
+    18: [153, 153, 153]
+    19: [30, 170, 250]
+    20: [0, 0, 255]     # [0, 220, 220]
+    21: [0, 175, 0]     # [35, 107, 142]
+    22: [80, 240, 150]  # [152, 251, 152]
+    23: [180, 130, 70]
+    24: [30, 30, 255]   # [60, 20, 220]
+    25: [0, 0, 255]
+    26: [245, 150, 100] # [142, 0, 0]
+    27: [180, 30, 80]   # [70, 0, 0]
+    28: [255, 0, 0]     # [100, 60, 0]
+    29: [90, 0, 0]
+    30: [110, 0, 0]
+    31: [100, 80, 0]
+    32: [150, 60, 30]   # [230, 0, 0]
+    33: [245, 230, 100] # [32, 11, 119]
+    34: [128, 128, 64]
+    35: [153, 153, 190]
+    36: [90, 120, 150]
+    37: [153, 153, 153]
+    38: [64, 64, 0]
+    39: [192, 128, 0]
+    40: [0, 64, 128]
+    41: [128, 64, 64]
+    42: [0, 0, 102]
+    43: [51, 0, 51]
+    44: [32, 32, 32]
+    100: [122, 122, 122]
+task_set_map:
+  0:
+    learning_map:
+      0: 0   # "unlabeled"
+      1: 0   # "ego vehicle" mapped to "unlabeled"
+      2: 0   # "rectification border" mapped to "unlabeled"
+      3: 0   # "out of roi" mapped to "unlabeled"
+      4: 0   # "static" mapped to "unlabeled"
+      5: 0   # "dynamic" mapped to "unlabeled"
+      6: 0   # "ground" mapped to "unlabeled"
+      7: 3   # "road"
+      8: 7   # "sidewalk"
+      9: 7   # "parking"
+      10: 0  # "rail track"
+      11: 4  # "building"
+      12: 0  # "wall"
+      13: 5  # "fence"
+      14: 0  # "guard rail"
+      15: 0  # "bridge"
+      16: 0  # "tunnel"
+      17: 7  # "pole"
+      18: 0  # "polegroup"
+      19: 7  # "traffic light"
+      20: 7  # "traffic sign"
+      21: 6  # "vegetation"
+      22: 7  # "terrain"
+      23: 0  # "sky"
+      24: 2  # "person"
+      25: 2  # "rider"
+      26: 1  # "car"
+      27: 7  # "truck"
+      28: 7  # "bus"
+      29: 7  # "caravan"
+      30: 7  # "trailer"
+      31: 7  # "train"
+      32: 7  # "motorcycle"
+      33: 7  # "bicycle"
+      34: 0  # "garage"
+      35: 0  # "gate"
+      36: 7  # "stop"
+      37: 7  # "smallpole"
+      38: 7  # "lamp"
+      39: 7  # "trash bin"
+      40: 7  # "vending machine"
+      41: 7  # "box"
+      42: 0  # "unknown construction"
+      43: 0  # "unknown vehicle"
+      44: 0  # "unknown object"
+      100: 7 # "catch-all"
+    learning_map_inv:
+      0: 0   # "unlabeled", and others ignored
+      1: 26  # "car"
+      2: 24  # "person"
+      3: 7   # "road"
+      4: 11  # "building"
+      5: 13  # "fence"
+      6: 21  # "vegetation"
+      7: 100 # "catch-all"
+    learning_ignore: # Ignore classes
+      0: True   # "unlabeled", and others ignored
+      1: False  # "car"
+      2: False  # "person"
+      3: False  # "road"
+      4: False  # "building"
+      5: False  # "fence"
+      6: False  # "vegetation"
+      7: False  # "catch-all"
+  1: 
+    learning_map:
+      0: 0   # "unlabeled"
+      1: 0   # "ego vehicle" mapped to "unlabeled"
+      2: 0   # "rectification border" mapped to "unlabeled"
+      3: 0   # "out of roi" mapped to "unlabeled"
+      4: 0   # "static" mapped to "unlabeled"
+      5: 0   # "dynamic" mapped to "unlabeled"
+      6: 10  # "ground" mapped to "unlabeled"
+      7: 4   # "road"
+      8: 5   # "sidewalk"
+      9: 10  # "parking"
+      10: 10 # "rail track"
+      11: 6  # "building"
+      12: 10 # "wall"
+      13: 7  # "fence"
+      14: 7  # "guard rail"
+      15: 10 # "bridge"
+      16: 10 # "tunnel"
+      17: 10 # "pole"
+      18: 10 # "polegroup"
+      19: 10 # "traffic light"
+      20: 10 # "traffic sign"
+      21: 8  # "vegetation"
+      22: 9  # "terrain"
+      23: 0  # "sky"
+      24: 3  # "person"
+      25: 3  # "rider"
+      26: 1  # "car"
+      27: 2  # "truck"
+      28: 10 # "bus"
+      29: 10 # "caravan"
+      30: 10 # "trailer"
+      31: 10 # "train"
+      32: 10 # "motorcycle"
+      33: 10 # "bicycle"
+      34: 10 # "garage"
+      35: 10 # "gate"
+      36: 10 # "stop"
+      37: 10 # "smallpole"
+      38: 10 # "lamp"
+      39: 10 # "trash bin"
+      40: 10 # "vending machine"
+      41: 10 # "box"
+      42: 10 # "unknown construction"
+      43: 10 # "unknown vehicle"
+      44: 10 # "unknown object"
+      100: 10 # "catch-all"
+    learning_map_inv: # inverse of previous map
+      0: 0      # "unlabeled", and others ignored
+      1: 26     # "car"
+      2: 27     # "truck"
+      3: 24     # "person"
+      4: 7      # "road"
+      5: 8      # "sidewalk"
+      6: 11     # "building"
+      7: 13     # "fence"
+      8: 21     # "vegetation"
+      9: 22     # "terrain"
+      10: 100   # "catch-all"
+    learning_ignore: # Ignore classes
+      0: True   # "unlabeled", and others ignored
+      1: False  # "car"
+      2: False  # "truck"
+      3: False  # "person"
+      4: False  # "road"
+      5: False  # "sidewalk"
+      6: False  # "building"
+      7: False  # "fence"
+      8: False  # "vegetation"
+      9: False  # "terrain"
+      10: False # "catch-all" 
+  2:
+    learning_map:
+      0: 0    # "unlabeled"
+      1: 0    # "ego vehicle" mapped to "unlabeled"
+      2: 0    # "rectification border" mapped to "unlabeled"
+      3: 0    # "out of roi" mapped to "unlabeled"
+      4: 0    # "static" mapped to "unlabeled"
+      5: 0    # "dynamic" mapped to "unlabeled"
+      6: 16   # "ground" mapped to "unlabeled"
+      7: 6    # "road"
+      8: 8    # "sidewalk"
+      9: 7    # "parking"
+      10: 16  # "rail track"
+      11: 9   # "building"
+      12: 16  # "wall"
+      13: 10  # "fence"
+      14: 10  # "guard rail"
+      15: 16  # "bridge"
+      16: 16  # "tunnel"
+      17: 14  # "pole"
+      18: 14  # "polegroup"
+      19: 16  # "traffic light"
+      20: 15  # "traffic sign"
+      21: 11  # "vegetation"
+      22: 13  # "terrain"
+      23: 0   # "sky"
+      24: 5   # "person"
+      25: 5   # "rider"
+      26: 1   # "car"
+      27: 4   # "truck"
+      28: 16  # "bus"
+      29: 16  # "caravan"
+      30: 16  # "trailer"
+      31: 16  # "train"
+      32: 3   # "motorcycle"
+      33: 2   # "bicycle"
+      34: 16  # "garage"
+      35: 16  # "gate"
+      36: 16  # "stop"
+      37: 14  # "smallpole"
+      38: 16  # "lamp"
+      39: 16  # "trash bin"
+      40: 16  # "vending machine"
+      41: 16  # "box"
+      42: 16  # "unknown construction"
+      43: 16  # "unknown vehicle"
+      44: 16  # "unknown object"
+      100: 16 # "catch-all"
+    learning_map_inv: # inverse of previous map
+      0: 0      # "unlabeled", and others ignored
+      1: 26     # "car"
+      2: 33     # "bicycle"
+      3: 32     # "motorcycle"
+      4: 27     # "truck"
+      5: 24     # "person"
+      6: 7      # "road"
+      7: 9      # "parking"
+      8: 8      # "sidewalk"
+      9: 11     # "building"
+      10: 13    # "fence"
+      11: 21    # "vegetation"
+      12: 0     # "trunk"
+      13: 22    # "terrain"
+      14: 17    # "pole"
+      15: 20    # "traffic-sign"
+      16: 100   # "catch-all"
+    learning_ignore: # Ignore classes
+      0: True    # "unlabeled", and others ignored
+      1: False   # "car"
+      2: False   # "bicycle"
+      3: False   # "motorcycle"
+      4: False   # "truck"
+      5: False   # "person"
+      6: False   # "road"
+      7: False   # "parking"
+      8: False   # "sidewalk"
+      9: False   # "building"
+      10: False  # "fence"
+      11: False  # "vegetation"
+      12: False  # "trunk"
+      13: False  # "terrain"
+      14: False  # "pole"
+      15: False  # "traffic-sign"
+      16: False  # "catch-all"
