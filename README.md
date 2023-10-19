@@ -42,7 +42,7 @@ ffmpeg -r 10 -i %d.png -vf scale=1620:1080 -vframes 500 ../1_pred_TS1.mp4
 
 NOTE: For ffmpeg commands, refer to [this link](https://hamelot.io/visualization/using-ffmpeg-to-convert-a-set-of-images-into-a-video/).
 
-## Step 5: Evaluation on KITTI-360
+## Step 2: Evaluation on KITTI-360
 
 ### Metric evaluation
 Run evaluation on a given task set using the following command:
