@@ -1,17 +1,18 @@
 # Lidar Panoptic Segmentation in an Open World
 
-![Gif](https://github.com/user-attachments/assets/2c3c2ab0-9bf1-4802-9e38-9bfe9c02c83a)\
+![Gif](https://github.com/user-attachments/assets/2c3c2ab0-9bf1-4802-9e38-9bfe9c02c83a)
 
 This repo provides supporting code for the paper: 
 
 Lidar Panoptic Segmentation in an Open World. IJCV 2024. Anirudh S Chakravarthy, Meghana Reddy Ganesina, Peiyun Hu, Laura Leal-Taixé, Shu Kong, Deva Ramanan, and Aljosa Osep.
 
-[IJCV Paper](https://link.springer.com/article/10.1007/s11263-024-02166-9)
-[Arxiv](https://arxiv.org/pdf/2409.14273)
+* [IJCV Paper](https://link.springer.com/article/10.1007/s11263-024-02166-9)
+* [Arxiv](https://arxiv.org/pdf/2409.14273)
+* [Code](https://github.com/g-meghana-reddy/open-world-panoptic-segmentation)
 
 
 This code builds on the PyTorch implementation of [4D-PLS]([url](https://github.com/MehmetAygun/4D-PLS)). Below, we provide instructions to train and evaluate our method, OWL.
-[fig.pdf](https://github.com/user-attachments/files/17172870/fig.pdf)
+![fig](https://github.com/user-attachments/assets/03319205-b9b0-4f4c-86cf-3a00cb5ae211)
 
 
 ## Step 1: Open-set recognition using 4D-PLS
