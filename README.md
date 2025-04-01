@@ -9,6 +9,7 @@ Lidar Panoptic Segmentation in an Open World. IJCV 2024. Anirudh S Chakravarthy,
 * [IJCV Paper](https://link.springer.com/article/10.1007/s11263-024-02166-9)
 * [Arxiv](https://arxiv.org/pdf/2409.14273)
 * [Code](https://github.com/g-meghana-reddy/open-world-panoptic-segmentation)
+* [Checkpoints](https://drive.google.com/drive/folders/1sAOLWWKvMpgSBlsQ_9qeqOb632Ko_9qT?usp=sharing)
 
 
 This code builds on the PyTorch implementation of [4D-PLS]([url](https://github.com/MehmetAygun/4D-PLS)). Below, we provide instructions to train and evaluate our method, OWL.
